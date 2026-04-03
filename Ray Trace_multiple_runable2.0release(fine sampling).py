@@ -246,7 +246,7 @@ while running:
          r1_arr,r2_arr,z_arr,d_arr,rm_arr,sgnr1_arr,sgnr2_arr,zc1_arr,zc2_arr,n_arr,np.float32(z_Object),np.float32(sizex),np.float32(sizey),np.int32(resx),np.int32(resy),np.int32(w),np.int32(h),
          np.float32(pw),np.float32(ph),np.int32(numm),np.int32(total_threads),np.int32(numlenses))
     )
-    cp.cuda.Stream.null.synchronize()
+
     t1 = time.time()
     print(f'Render time (z={z_Object:.1f}): {t1-t0:.4f}s')
     render_img = cp.asnumpy(final_img).reshape((h, w, 3))
