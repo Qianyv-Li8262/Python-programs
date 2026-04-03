@@ -239,7 +239,6 @@ for(int i=0; i < numlenses && i < MAX_LENSES; ++i){
             dx = d2x;
             dy = d2y;
             dz = d2z;
-
             if (lensid + 1 < numlenses) {
                 float zzz = __ldg(&z_arr[lensid+1]);
                 current_z_lens = zzz - z2;
