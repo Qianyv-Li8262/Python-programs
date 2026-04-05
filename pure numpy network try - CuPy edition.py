@@ -1,6 +1,6 @@
 import numpy as np
 import cupy as cp
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import time
 
 # ============ Adam 超参数 ============
@@ -141,19 +141,19 @@ for i in range(total_iters):
 t1 = time.time()
 print(f"Training time: {t1 - t0:.2f}s")
 
-# ============ 可视化 ============
-x_steps = cp.linspace(0, 1, 300, dtype=cp.float64)
-y_steps = cp.linspace(0, 1, 300, dtype=cp.float64)
-grid_x, grid_y = cp.meshgrid(x_steps, y_steps)
-input_grid = cp.vstack([grid_x.flatten(), grid_y.flatten()]).T
-x0 = cp.matmul(input_grid, B).T
-x_input_plot = cp.vstack((cp.cos(x0), cp.sin(x0)))
-yh = eval(x_input_plot).reshape((300, 300)).get()
+# # ============ 可视化 ============
+# x_steps = cp.linspace(0, 1, 300, dtype=cp.float64)
+# y_steps = cp.linspace(0, 1, 300, dtype=cp.float64)
+# grid_x, grid_y = cp.meshgrid(x_steps, y_steps)
+# input_grid = cp.vstack([grid_x.flatten(), grid_y.flatten()]).T
+# x0 = cp.matmul(input_grid, B).T
+# x_input_plot = cp.vstack((cp.cos(x0), cp.sin(x0)))
+# yh = eval(x_input_plot).reshape((300, 300)).get()
 
-fig = plt.figure(figsize=(10, 7))
-ax = fig.add_subplot(111, projection='3d')
-X_np = grid_x.get()
-Y_np = grid_y.get()
-ax.plot_surface(X_np, Y_np, yh, cmap='viridis')
-ax.set_title('Neural Network Approximation (Adam Optimizer)')
-plt.show()
+# fig = plt.figure(figsize=(10, 7))
+# ax = fig.add_subplot(111, projection='3d')
+# X_np = grid_x.get()
+# Y_np = grid_y.get()
+# ax.plot_surface(X_np, Y_np, yh, cmap='viridis')
+# ax.set_title('Neural Network Approximation (Adam Optimizer)')
+# plt.show()
