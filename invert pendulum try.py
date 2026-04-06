@@ -38,10 +38,11 @@ optimizer = optim.Adam(net.parameters(), lr=0.001)
 dt = 0.05  # 时间步长
 
 steps=100
-
+times=5
+y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
 for epoch in range(1000):
     optimizer.zero_grad()
-    y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
+    # y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
     ttloss=0
     for i in range(steps):
         F=net.getForce(y0)
@@ -52,6 +53,10 @@ for epoch in range(1000):
     ttloss.backward()
     torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
     optimizer.step()
+    y0=y0.detach()
+    if ttloss>10 or abs(y[1])>10 or abs(y[0])>10:
+        y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
+        print('---Reset---')
     print(ttloss)
     print(y)
     print(F)
