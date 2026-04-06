@@ -18,7 +18,7 @@ class VerySimpleCar(nn.Module):
     def getForce(self,y):
         yy=torch.stack([y[0],torch.sin(y[1]),torch.cos(y[1]),torch.sin(2*y[1]),torch.cos(2*y[1]),y[2],y[3]])
         return 20.0*self.net(yy)
-mu=1.0
+mu=1
 def getDerivative(y,f):
     costh=torch.cos(y[1])
     sinth=torch.sin(y[1])
@@ -147,7 +147,7 @@ u=0
 y0=manager.get_init_state(device)
 
 
-for epoch in range(1100):
+for epoch in range(3000):
     optimizer.zero_grad()
     ttloss=0
     y,ttloss=compiled_step(y0,dt,steps)
