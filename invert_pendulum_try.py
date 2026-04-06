@@ -50,7 +50,7 @@ def sim_step(y0,dt,step):
         ttlos+=loss(y)
         y0=y
     return y,ttlos/step
-# compiled_step = torch.compile(sim_step, mode="reduce-overhead")
+compiled_step = torch.compile(sim_step, mode="reduce-overhead")
 for epoch in range(250):
     optimizer.zero_grad()
     # y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
@@ -61,13 +61,13 @@ for epoch in range(250):
     #     ttloss+=loss(y)
     #     y0=y
     # ttloss/=steps
-    # y,ttloss=compiled_step(y0,dt,steps)
-    y,ttloss=sim_step(y0,dt,steps)
+    y,ttloss=compiled_step(y0,dt,steps)
+    # y,ttloss=sim_step(y0,dt,steps)
     ttloss.backward()
     torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
     optimizer.step()
     # y0=y
-    y0=y.detach()
+    y0=y.clone().detach()
     if ttloss>10 or abs(y[1])>10 or abs(y[0])>10:
         y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
         print('---Reset---')
