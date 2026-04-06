@@ -56,12 +56,7 @@ for epoch in range(1500):
     optimizer.zero_grad()
     # y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
     ttloss=0
-    # for i in range(steps):
-    #     F=net.getForce(y0)
-    #     y=rk2solver(y0,dt,F[0])
-    #     ttloss+=loss(y)
-    #     y0=y
-    # ttloss/=steps
+
     y,ttloss=compiled_step(y0,dt,steps)
     # y,ttloss=sim_step(y0,dt,steps)
     u+=1
