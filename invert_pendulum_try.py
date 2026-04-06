@@ -40,23 +40,37 @@ dt = 0.05  # 时间步长
 steps=100
 times=5
 y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
-for epoch in range(1000):
+
+def sim_step(y0,dt,step):
+    ttlos = torch.tensor(0.0, device=y0.device)
+    for i in range(step):
+        F=net.getForce(y0)
+        y=rk2solver(y0,dt,F[0])
+        ttlos+=loss(y)
+        y0=y
+    return y,ttlos/step
+# compiled_step = torch.compile(sim_step, mode="reduce-overhead")
+for epoch in range(250):
     optimizer.zero_grad()
     # y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
     ttloss=0
-    for i in range(steps):
-        F=net.getForce(y0)
-        y=rk2solver(y0,dt,F[0])
-        ttloss+=loss(y)
-        y0=y
-    ttloss/=steps
+    # for i in range(steps):
+    #     F=net.getForce(y0)
+    #     y=rk2solver(y0,dt,F[0])
+    #     ttloss+=loss(y)
+    #     y0=y
+    # ttloss/=steps
+    # y,ttloss=compiled_step(y0,dt,steps)
+    y,ttloss=sim_step(y0,dt,steps)
     ttloss.backward()
     torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
     optimizer.step()
-    y0=y0.detach()
+    # y0=y
+    y0=y.detach()
     if ttloss>10 or abs(y[1])>10 or abs(y[0])>10:
         y0 = torch.tensor([0.8, 0.2, 0.0, 0.0], dtype=torch.float32, requires_grad=False,device=device)
         print('---Reset---')
     print(ttloss)
     print(y)
-    print(F)
+    # print(F)
+    print(epoch)
