@@ -1,4 +1,5 @@
 import torch
+torch.set_float32_matmul_precision('high')
 import torch.nn as nn
 import torch.optim as optim
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
