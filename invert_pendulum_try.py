@@ -150,8 +150,8 @@ y0=manager.get_init_state(device)
 for epoch in range(1100):
     optimizer.zero_grad()
     ttloss=0
-    # y,ttloss=compiled_step(y0,dt,steps)
-    y,ttloss=sim_step(y0,dt,steps)
+    y,ttloss=compiled_step(y0,dt,steps)
+    # y,ttloss=sim_step(y0,dt,steps)
     u+=1
     y0=y.clone().detach()
     if ttloss>20 or abs(y[1])>10 or abs(y[0])>10 or abs(y[2])>10:
