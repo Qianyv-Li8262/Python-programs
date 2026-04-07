@@ -39,7 +39,7 @@ def rk2solver(y0,dt,f):
 def loss(y,f):
     e=0.015
     # return torch.sqrt(y[0]**2+e**2)*0.1+torch.relu(y[0]**2-16)+(1-torch.cos(y[1]))*2+0.001*y[2]**2+0.001*y[3]**2+0.001*f**2
-    return y[0]**2*0.5+torch.relu(y[0]**2-16)+(1-torch.cos(y[1]))*5+0.05*y[2]**2+0.5*y[3]**2+0.005*f**2
+    return y[0]**2*0.5+torch.relu(y[0]**2-16)+(1-torch.cos(y[1]))*5+0.05*y[2]**2+0.6*y[3]**2+0.005*f**2
 
 
 
@@ -147,7 +147,7 @@ u=0
 y0=manager.get_init_state(device)
 t=0
 
-for epoch in range(3000):
+for epoch in range(2000):
     optimizer.zero_grad()
     ttloss=0
     y,ttloss=compiled_step(y0,dt,steps)
