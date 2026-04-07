@@ -48,16 +48,20 @@ class ActorCritic:
         dist=distributions.Normal(mu,std)
         return dist,v
 
+def chkdeath(y):
+    x=torch.abs[y[...,0]]>5.0
+    return x.float()
+
 mainNetwork=ActorCritic(7).to(device)
 
-#-------------主训练循环开始，采样----------------
+
 sample_batch_size=256
 N=8
 #先不加for循环
 level=0
 max_level=10
 dt=0.05
-steps=40
+steps=50
 # x_scale = 0.1 + (level / max_level) * 2.0
 # x_pos = (torch.rand(1, device=device) - 0.5) * 2.0 * x_scale
 # th_scale = 0.1 + (level / max_level) * 3.04
@@ -69,6 +73,10 @@ def get_init(batch_size):
     th_pos = (torch.rand(batch_size, device=device) - 0.5) * 2.0 * th_scale
     v_noise = (torch.rand((batch_size,2), device=device) - 0.5) * 0.2
     return torch.stack([x_pos, th_pos, v_noise[:,0], v_noise[:,1]],dim=-1)
+
+buffer=[]
+
+# -------------主训练循环开始，采样----------------
 for n in range(N):
     y0=get_init(sample_batch_size)
     trajectory=[]
@@ -79,4 +87,20 @@ for n in range(N):
         log_prob=dist.log_prob(f)
         next_state=rk2solver(y0,dt,f)
         rwd=reward(next_state,f)
-        trajectory.append({'state':y0,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach()})
+        mask_death=chkdeath(next_state)
+        trajectory.append({'state':y0,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+        reset_states=get_init(sample_batch_size)
+        y0 = torch.where(mask_death.unsqueeze(-1) > 0.5, reset_states, next_state)
+    buffer.append(trajectory)
+
+# ------------采样结束，计算优势------------
+gamma=0.95
+lamb=0.95
+A=torch.zeros((sample_batch_size,1),device=device)
+for t in reversed(range(steps)):
+    _,Vp=mainNetwork(trajectory[steps-1]['state'])
+    V_plus_one=buffer[t+1]['V'] if t+1 < steps else Vp
+    delta=trajectory[t]['reward']+gamma*(1-trajectory[t]['death'])*V_plus_one-trajectory[t]['V']
+    A=delta+gamma*lamb*A*(1-trajectory[t]['death'])
+    trajectory[t]['A']=A
+    trajectory[t]['R']=A+trajectory[t]['V']
