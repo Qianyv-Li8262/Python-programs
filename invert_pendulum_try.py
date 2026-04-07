@@ -64,18 +64,6 @@ class CurriculumManager:
         self.max_level = 10
         self.loss_window = []
 
-    # def get_init_state(self, device,debug=-1):
-    #     a=self.level
-    #     if debug!=-1:
-    #         self.level=debug
-    #     th_scale = 0.1 + (self.level / self.max_level) * 3.04
-    #     x_scale = 0.1 + (self.level / self.max_level) * 2.0
-    #     self.level=a
-    #     noise = (torch.rand(4, device=device) - 0.5) * 2.0 * \
-    #             torch.tensor([x_scale, th_scale, 0.1, 0.1], device=device)
-    #     return torch.tensor([0.0, 0.0, 0.0, 0.0], device=device) + noise
-
-
     def get_init_state(self,device,debug=-1):
         a=self.level
         if debug!=-1:
