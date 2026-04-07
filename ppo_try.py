@@ -21,9 +21,9 @@ def rk2solver(y0,dt,f):
     ymid=y0+dt/2*getDerivative(y0,f)
     return y0+dt*getDerivative(ymid,f)
 def reward(y,f):
-    f=f.view_as(y[...,0])
+    # f=f.view_as(y[...,0])
     return 1.0-(y[...,0]**2*0.5+torch.relu(y[...,0]**2-16)+(1-torch.cos(y[...,1]))*5+0.05*y[...,2]**2+0.6*y[...,3]**2+0.005*f**2)
-class ActorCritic:
+class ActorCritic(nn.Module):
     def __init__(self,indim):
         super().__init__()
         self.rootnet=nn.Sequential(
@@ -49,7 +49,7 @@ class ActorCritic:
         return dist,v
 
 def chkdeath(y):
-    x=torch.abs[y[...,0]]>5.0
+    x=torch.abs(y[...,0])>5.0
     return x.float()
 
 mainNetwork=ActorCritic(7).to(device)
@@ -75,32 +75,38 @@ def get_init(batch_size):
     return torch.stack([x_pos, th_pos, v_noise[:,0], v_noise[:,1]],dim=-1)
 
 buffer=[]
-
-# -------------主训练循环开始，采样----------------
-for n in range(N):
-    y0=get_init(sample_batch_size)
-    trajectory=[]
-    for i in range(steps):
-        state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
-        dist,V=mainNetwork(state_in)
-        f=dist.sample()
-        log_prob=dist.log_prob(f)
-        next_state=rk2solver(y0,dt,f)
-        rwd=reward(next_state,f)
-        mask_death=chkdeath(next_state)
-        trajectory.append({'state':y0,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
-        reset_states=get_init(sample_batch_size)
-        y0 = torch.where(mask_death.unsqueeze(-1) > 0.5, reset_states, next_state)
-    buffer.append(trajectory)
-
-# ------------采样结束，计算优势------------
 gamma=0.95
 lamb=0.95
-A=torch.zeros((sample_batch_size,1),device=device)
-for t in reversed(range(steps)):
-    _,Vp=mainNetwork(trajectory[steps-1]['state'])
-    V_plus_one=buffer[t+1]['V'] if t+1 < steps else Vp
-    delta=trajectory[t]['reward']+gamma*(1-trajectory[t]['death'])*V_plus_one-trajectory[t]['V']
-    A=delta+gamma*lamb*A*(1-trajectory[t]['death'])
-    trajectory[t]['A']=A
-    trajectory[t]['R']=A+trajectory[t]['V']
+# A=torch.zeros((sample_batch_size,1),device=device)
+# -------------主训练循环开始，采样----------------
+# for n in range(N):
+#     y0=get_init(sample_batch_size)
+#     trajectory=[]
+#     for i in range(steps):
+#         state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
+#         dist,V=mainNetwork(state_in)
+#         f_raw=dist.sample()
+#         log_prob=dist.log_prob(f_raw)
+#         f=f_raw.squeeze(-1)
+#         log_prob=log_prob.squeeze(-1)
+#         V=V.squeeze(-1)
+#         next_state=rk2solver(y0,dt,f)
+#         rwd=reward(next_state,f)
+#         mask_death=chkdeath(next_state)
+#         trajectory.append({'state':state_in,'action':f_raw,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+#         reset_states=get_init(sample_batch_size)
+#         y0 = torch.where(mask_death.unsqueeze(-1) > 0.5, reset_states, next_state)
+# # ------------一轮采样结束，立即计算优势------------
+#     final_state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
+#     with torch.no_grad:
+#         _,Vp=mainNetwork(trajectory[steps-1]['state'])
+#         Vp=Vp.squeeze(-1)
+#     A=torch.zeros(sample_batch_size,device=device)
+#     for t in reversed(range(steps)):
+#         # _,Vp=mainNetwork(trajectory[steps-1]['state'])
+#         V_plus_one=buffer[t+1]['V'] if t+1 < steps else Vp
+#         delta=trajectory[t]['reward']+gamma*(1-trajectory[t]['death'])*V_plus_one-trajectory[t]['V']
+#         A=delta+gamma*lamb*A*(1-trajectory[t]['death'])
+#         trajectory[t]['A']=A
+#         trajectory[t]['R']=A+trajectory[t]['V']
+#     buffer.append(trajectory)
