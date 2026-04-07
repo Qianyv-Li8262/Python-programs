@@ -145,7 +145,7 @@ def sim_step(y0,dt,step):
 compiled_step = torch.compile(sim_step, mode="reduce-overhead")
 u=0
 y0=manager.get_init_state(device)
-
+t=0
 
 for epoch in range(3000):
     optimizer.zero_grad()
@@ -157,10 +157,12 @@ for epoch in range(3000):
     if ttloss>20 or abs(y[1])>10 or abs(y[0])>10 or abs(y[2])>10:
         y0=manager.get_init_state(device)
         u=0
+        t+=1
         print('---OutBoundReset---')
     if u>=times:
         y0=manager.get_init_state(device)
         u=0
+        t+=1
         print('---Reset---')
     if torch.isnan(ttloss) or torch.isinf(ttloss) or torch.isnan(y).any():
         y0=manager.get_init_state(device)
@@ -176,6 +178,7 @@ for epoch in range(3000):
     print(epoch)
     print(f"Level: {manager.level}")
     print(f'u={u}')
+    print(f't={t}')
     print(ttloss.item())
     print(y)
     manager.update(ttloss.item(),u,times)
