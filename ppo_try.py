@@ -221,7 +221,7 @@ for _ in range(MAX_EPISODE_NUMBER):
     for epoch in range(K):
         print(f'epoch {epoch} started.')
         buffer_shfled={}
-        shfl_idx=torch.randperm(N*sample_batch_size*steps)
+        shfl_idx=torch.randperm(N*sample_batch_size*steps,device=device)
         for key,value in buffer.items():
             buffer_shfled[key]=shfl(reshap(value),shfl_idx)
         for i in range(u):
@@ -238,10 +238,10 @@ for _ in range(MAX_EPISODE_NUMBER):
             entropy_loss=-torch.mean(lggstd)-1.418938533
             total_loss = actor_loss + c1 * critic_loss + c2 * entropy_loss
             optimizer.zero_grad(set_to_none=True)
-            if torch.isnan(total_loss) or torch.isinf(total_loss):
-                print('NaN detected,skipping batch.')
-                optimizer.zero_grad(set_to_none=True)
-                continue
+            # if torch.isnan(total_loss) or torch.isinf(total_loss):
+            #     print('NaN detected,skipping batch.')
+            #     optimizer.zero_grad(set_to_none=True)
+            #     continue
             # print('doing backward.')
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(mainNetwork.parameters(), 0.5)  # 梯度裁剪
