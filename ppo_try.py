@@ -50,7 +50,7 @@ def rk2solver(y0,dt,f):
 
 def reward(y,f):
     # f=f.view_as(y[...,0])
-    return 1.0-(y[...,0]**2*0.5+torch.relu(y[...,0]**2-16)*1.5+(1-torch.cos(y[...,1]))*8+0.05*y[...,2]**2+1*y[...,3]**2+0.005*f**2)
+    return 5.0-(y[...,0]**2*0.5+torch.relu(y[...,0]**2-16)*1.5+(1-torch.cos(y[...,1]))*5+0.05*y[...,2]**2+1*y[...,3]**2+0.005*f**2)
 class Actor(nn.Module):
     def __init__(self,indim):
         super().__init__()
@@ -105,11 +105,13 @@ def chkdeath(y):
     return z.float()
 
 mainNetwork=Actor(7).to(device)
+# mainNetwork.load_state_dict(torch.load("pendulum_controller_ppo.pth"))
 mainNetwork=torch.compile(mainNetwork)
 mainNetwork2=Critic(7).to(device)
+# mainNetwork2.load_state_dict(torch.load("pendulum_controller_critic.pth"))
 mainNetwork2=torch.compile(mainNetwork2,mode="reduce-overhead")
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
-optimizer2=optim.Adam(mainNetwork2.parameters(),lr=0.0003)
+optimizer2=optim.Adam(mainNetwork2.parameters(),lr=0.001)
 
 sample_batch_size=4096
 N=2 
@@ -129,12 +131,12 @@ def get_init(batch_size):
 # buffer=[]
 gamma=0.95
 lamb=0.95
-K=5
-MAX_EPISODE_NUMBER=75
+K=7
+MAX_EPISODE_NUMBER=170
 mini_batch_size=2048
 e=0.2
 c1=0.5
-c2=0.01
+c2=0.02
 u=N*sample_batch_size*steps//mini_batch_size
 # -------------主训练循环开始，采样----------------
 # for n in range(N):
@@ -312,7 +314,8 @@ for _ in range(MAX_EPISODE_NUMBER):
         print(f'epoch {epoch} ,loss {v}')
     uu=buffer['reward'].mean().item()
     print(f'\nAverage Reward={uu}')
-    if uu>0.96:
-        level+=1
+    if uu>0.6:
+        level+=0.05
 torch.save(mainNetwork.state_dict(), "pendulum_controller_ppo.pth")
+torch.save(mainNetwork2.state_dict(), "pendulum_controller_critic.pth")
 print("权重已成功保存！")
