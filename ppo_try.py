@@ -46,7 +46,7 @@ class ActorCritic(nn.Module):
         v=self.critic(feat)
         std=torch.exp(self.log_std)
         dist=distributions.Normal(mu,std)
-        return dist,v
+        return dist,v.squeeze(-1)
 
 def chkdeath(y):
     x=torch.abs(y[...,0])>5.0
@@ -71,40 +71,84 @@ def get_init(batch_size):
     v_noise = (torch.rand((batch_size,2), device=device) - 0.5) * 0.2
     return torch.stack([x_pos, th_pos, v_noise[:,0], v_noise[:,1]],dim=-1)
 
-buffer=[]
+# buffer=[]
 gamma=0.95
 lamb=0.95
 
 # -------------主训练循环开始，采样----------------
+# for n in range(N):
+#     y0=get_init(sample_batch_size)
+#     trajectory=[]
+#     for i in range(steps):
+#         state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
+#         dist,V=mainNetwork(state_in)
+#         f=dist.sample().squeeze(-1)   #f (256, )
+#         log_prob=dist.log_prob(f)     #log_prob (256, )
+#         next_state=rk2solver(y0,dt,f)
+#         rwd=reward(next_state,f)     # rwd (256, )
+#         mask_death=chkdeath(next_state)   #mask_death (256, )
+#         # rwd=rwd-mask_death*100.0
+#         trajectory.append({'state':state_in,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+#         if i==steps-1:
+#             trajectory[-1]['next_state']=next_state
+#         reset_states=get_init(sample_batch_size)
+#         y0 = torch.where(mask_death.unsqueeze(-1)> 0.5, reset_states, next_state)
+#     buffer.append(trajectory)
+
+st=torch.zeros([sample_batch_size,steps*N,7],device=device)
+ac=torch.zeros((sample_batch_size,steps*N),device=device)
+rw=torch.zeros((sample_batch_size,steps*N),device=device)
+lp=torch.zeros((sample_batch_size,steps*N),device=device)
+vv=torch.zeros((sample_batch_size,steps*N),device=device)
+dth=torch.zeros((sample_batch_size,steps*N),device=device)
+ns=torch.zeros((sample_batch_size,steps*N,4),device=device)
+A=torch.zeros((sample_batch_size,steps*N),device=device)
+R=torch.zeros((sample_batch_size,steps*N),device=device)
+buffer={'state':st,'action':ac,'reward':rw,'log_prob':lp,'V':vv,'death':dth,'next_state':ns,'A':A,'R':R}
+
+
+
+
 for n in range(N):
     y0=get_init(sample_batch_size)
-    trajectory=[]
+    # trajectory=[]
     for i in range(steps):
         state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
         dist,V=mainNetwork(state_in)
-        f=dist.sample()
-        log_prob=dist.log_prob(f)
+        f=dist.sample().squeeze(-1)   #f (256, )
+        log_prob=dist.log_prob(f.unsqueeze(-1)).squeeze(-1)     #log_prob (256, )
         next_state=rk2solver(y0,dt,f)
-        rwd=reward(next_state,f)
-        mask_death=chkdeath(next_state)
-        trajectory.append({'state':state_in,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+        rwd=reward(next_state,f)     # rwd (256, )
+        mask_death=chkdeath(next_state)   #mask_death (256, )
+        # rwd=rwd-mask_death*100.0
+        # trajectory.append({'state':state_in,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+        buffer['state'][:,i+n*steps,:]=state_in
+        buffer['action'][:,i+n*steps]=f
+        buffer['reward'][:,i+n*steps]=rwd
+        buffer['log_prob'][:,i+n*steps]=log_prob.detach()
+        buffer['V'][:,i+n*steps]=V.detach()
+        buffer['death'][:,i+n*steps]=mask_death
         if i==steps-1:
-            trajectory[-1]['next_state']=next_state
+            buffer['next_state'][:,i+n*steps,:]=next_state
         reset_states=get_init(sample_batch_size)
-        y0 = torch.where(mask_death> 0.5, reset_states, next_state)
-    buffer.append(trajectory)
+        y0 = torch.where(mask_death.unsqueeze(-1)> 0.5, reset_states, next_state)
+    # buffer.append(trajectory)
+
 
 for n in range(N):
-    traj=buffer[n]
-    final_state_raw=traj[-1]['next_state']
+    # traj=buffer[n]
+    final_state_raw=buffer['next_state'][:,(n+1)*steps-1,:]
     final_state_in=torch.stack([final_state_raw[:,0],torch.sin(final_state_raw[:,1]),
                                 torch.cos(final_state_raw[:,1]),torch.sin(2*final_state_raw[:,1]),
                                 torch.cos(2*final_state_raw[:,1]),final_state_raw[:,2],final_state_raw[:,3]],dim=-1)
     _,Vp=mainNetwork(final_state_in)
     A=torch.zeros(sample_batch_size,device=device)
     for t in reversed(range(steps)):
-        V_next=traj[t+1]['V'] if t+1<steps else Vp
-        delta=traj[t]['reward']+gamma*(1-traj[t]['death'])*V_next-traj[t]['V']
-        A=delta+gamma*lamb*A*(1-traj[t]['death'])
-        buffer[n][t]['A']=A
-        buffer[n][t]['R']=A+traj[t]['V']
+        # V_next=traj[t+1]['V'] if t+1<steps else Vp
+        V_next=buffer['V'][...,n*steps+t+1] if t+1<steps else Vp
+        delta=buffer['reward'][...,n*steps+t]+gamma*(1-buffer['death'][...,n*steps+t])*V_next-buffer['V'][...,n*steps+t]
+        A=delta+gamma*lamb*A*(1-buffer['death'][:,n*steps+t])
+        buffer['A'][:,n*steps+t]=A
+        buffer['R'][:,n*steps+t]=A+buffer['V'][:,n*steps+t]
+
+
