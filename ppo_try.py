@@ -1,3 +1,4 @@
+print('Hello World!')
 import torch
 import torch._inductor.config as inductor_config
 inductor_config.cpp_wrapper = False 
