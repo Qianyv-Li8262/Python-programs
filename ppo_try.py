@@ -8,7 +8,21 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"当前运行设备: {device}")
 k=1.0
 
-def getDerivative(y,f):
+# def getDerivative(y,f):
+#     costh=torch.cos(y[...,1])
+#     sinth=torch.sin(y[...,1])
+#     D = 4/3*(1+k)-costh**2
+#     xdot=(4/3*y[...,2]-costh*y[...,3])/D
+#     thdot=((1+k)*y[...,3]-costh*y[...,2])/D
+#     pxdot=f
+#     pthdot=sinth*(1-xdot*thdot)
+#     return torch.stack([xdot,thdot,pxdot,pthdot],dim=-1)
+# def rk2solver(y0,dt,f):
+#     ymid=y0+dt/2*getDerivative(y0,f)
+#     return y0+dt*getDerivative(ymid,f)
+# @torch.compile
+def rk2solver(y0,dt,f):
+    y=y0
     costh=torch.cos(y[...,1])
     sinth=torch.sin(y[...,1])
     D = 4/3*(1+k)-costh**2
@@ -16,13 +30,24 @@ def getDerivative(y,f):
     thdot=((1+k)*y[...,3]-costh*y[...,2])/D
     pxdot=f
     pthdot=sinth*(1-xdot*thdot)
-    return torch.stack([xdot,thdot,pxdot,pthdot],dim=-1)
-def rk2solver(y0,dt,f):
-    ymid=y0+dt/2*getDerivative(y0,f)
-    return y0+dt*getDerivative(ymid,f)
+    v1=torch.stack([xdot,thdot,pxdot,pthdot],dim=-1)
+    ymid=y0+dt/2*v1
+    # return y0+dt*getDerivative(ymid,f)
+    y=ymid
+    costh=torch.cos(y[...,1])
+    sinth=torch.sin(y[...,1])
+    D = 4/3*(1+k)-costh**2
+    xdot=(4/3*y[...,2]-costh*y[...,3])/D
+    thdot=((1+k)*y[...,3]-costh*y[...,2])/D
+    pxdot=f
+    pthdot=sinth*(1-xdot*thdot)
+    v2=torch.stack([xdot,thdot,pxdot,pthdot],dim=-1)
+    y=y0+dt*v2
+    return y
+
 def reward(y,f):
     # f=f.view_as(y[...,0])
-    return 1.0-(y[...,0]**2*0.5+torch.relu(y[...,0]**2-16)+(1-torch.cos(y[...,1]))*5+0.05*y[...,2]**2+0.6*y[...,3]**2+0.005*f**2)
+    return 1.0-(y[...,0]**2*0.5+torch.relu(y[...,0]**2-16)*1.5+(1-torch.cos(y[...,1]))*5+0.05*y[...,2]**2+0.6*y[...,3]**2+0.005*f**2)
 class ActorCritic(nn.Module):
     def __init__(self,indim):
         super().__init__()
@@ -44,16 +69,16 @@ class ActorCritic(nn.Module):
         feat=self.rootnet(state)
         mu=10*self.actor(feat)
         v=self.critic(feat)
-        std=torch.exp(self.log_std)
-        dist=distributions.Normal(mu,std)
-        return dist,v.squeeze(-1)
+        # std=torch.exp(self.log_std)
+        # dist=distributions.Normal(mu,std)
+        return mu,self.log_std,v.squeeze(-1)
 
 def chkdeath(y):
     x=torch.abs(y[...,0])>5.0
     return x.float()
 
 mainNetwork=ActorCritic(7).to(device)
-mainNetwork=torch.compile(mainNetwork)
+mainNetwork=torch.compile(mainNetwork,mode="reduce-overhead")
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
 
 sample_batch_size=256
@@ -118,6 +143,21 @@ def reshap(tensor):
 def shfl(tensor,shflidx):
     return tensor[shflidx,:] if tensor.dim()==2 else tensor[shflidx]
 
+
+
+@torch.compile
+def sample_step(y0, net_mu, net_lgstd):
+    f=torch.clamp(net_mu+torch.randn_like(net_mu)*torch.exp(net_lgstd),-15,15)
+    log_prob=-((f-net_mu)**2)/(2*torch.exp(2*net_lgstd))-net_lgstd-0.9189385332
+    f_sq=f.squeeze(-1)
+    next_state=rk2solver(y0,dt,f_sq)
+    rwd=reward(next_state,f_sq)
+    mask_death=(torch.abs(next_state[...,0])>5.0).float()
+    return f_sq, log_prob.squeeze(-1), next_state, rwd, mask_death
+
+
+
+
 MAX_EPISODE_NUMBER=3
 # -------采样--------
 for _ in range(MAX_EPISODE_NUMBER):
@@ -127,20 +167,24 @@ for _ in range(MAX_EPISODE_NUMBER):
             y0=get_init(sample_batch_size)
     # trajectory=[]
             for i in range(steps):
+                # torch.compiler.cudagraph_mark_step_begin() 
                 state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
-                dist,V=mainNetwork(state_in)
-                f=dist.sample().squeeze(-1)   #f (256, )
-                log_prob=dist.log_prob(f.unsqueeze(-1)).squeeze(-1)     #log_prob (256, )
-                next_state=rk2solver(y0,dt,f)
-                rwd=reward(next_state,f)     # rwd (256, )
-                mask_death=chkdeath(next_state)   #mask_death (256, )
+                mu,lgstd,V=mainNetwork(state_in)
+                # f=torch.clamp(mu+torch.randn_like(mu)*torch.exp(lgstd),-15,15)
+                # log_prob=-((f-mu)**2)/(2*torch.exp(2*lgstd))-lgstd-0.9189385332
+                # # f=dist.sample().squeeze(-1)   #f (256, )
+                # # log_prob=dist.log_prob(f.unsqueeze(-1)).squeeze(-1)     #log_prob (256, )
+                # next_state=rk2solver(y0,dt,f.squeeze(-1))
+                # rwd=reward(next_state,f.squeeze(-1))     # rwd (256, )
+                # mask_death=chkdeath(next_state)   #mask_death (256, )
             # rwd=rwd-mask_death*100.0
             # trajectory.append({'state':state_in,'action':f,'reward':rwd,'log_prob':log_prob.detach(),'V':V.detach(),'death':mask_death})
+                fsq,log_prob,next_state,rwd,mask_death=sample_step(y0,mu,lgstd)
                 buffer['state'][:,i+n*steps,:]=state_in
-                buffer['action'][:,i+n*steps]=f
-                buffer['reward'][:,i+n*steps]=rwd
+                buffer['action'][:,i+n*steps]=fsq
+                buffer['reward'][:,i+n*steps]=rwd.squeeze(-1)
                 buffer['log_prob'][:,i+n*steps]=log_prob.detach()
-                buffer['V'][:,i+n*steps]=V.detach()
+                buffer['V'][:,i+n*steps]=V.detach().squeeze(-1)
                 buffer['death'][:,i+n*steps]=mask_death
                 if i==steps-1:
                     buffer['next_state'][:,i+n*steps,:]=next_state
@@ -156,13 +200,13 @@ for _ in range(MAX_EPISODE_NUMBER):
             final_state_in=torch.stack([final_state_raw[:,0],torch.sin(final_state_raw[:,1]),
                                     torch.cos(final_state_raw[:,1]),torch.sin(2*final_state_raw[:,1]),
                                     torch.cos(2*final_state_raw[:,1]),final_state_raw[:,2],final_state_raw[:,3]],dim=-1)
-            _,Vp=mainNetwork(final_state_in)
+            _,__,Vp=mainNetwork(final_state_in)
             A=torch.zeros(sample_batch_size,device=device)
             for t in reversed(range(steps)):
         # V_next=traj[t+1]['V'] if t+1<steps else Vp
                 V_next=buffer['V'][...,n*steps+t+1] if t+1<steps else Vp
                 delta=buffer['reward'][...,n*steps+t]+gamma*(1-buffer['death'][...,n*steps+t])*V_next-buffer['V'][...,n*steps+t]
-                A=delta+gamma*lamb*A*(1-buffer['death'][:,n*steps+t])
+                A=delta+gamma*lamb*A*(1-buffer['death'][:,n*steps+t])-buffer['death'][:,n*steps+t]*100.0
                 buffer['A'][:,n*steps+t]=A
                 buffer['R'][:,n*steps+t]=A+buffer['V'][:,n*steps+t]
 
@@ -181,18 +225,23 @@ for _ in range(MAX_EPISODE_NUMBER):
         for key,value in buffer.items():
             buffer_shfled[key]=shfl(reshap(value),shfl_idx)
         for i in range(u):
-            dis,V_pred=mainNetwork(buffer_shfled['state'][i*mini_batch_size:(i+1)*mini_batch_size,:])
+            muu,lggstd,V_pred=mainNetwork(buffer_shfled['state'][i*mini_batch_size:(i+1)*mini_batch_size,:])
             returns=buffer_shfled['R'][i*mini_batch_size:(i+1)*mini_batch_size]
             old_action=buffer_shfled['action'][i*mini_batch_size:(i+1)*mini_batch_size]
-            new_log_probs=dis.log_prob(old_action.unsqueeze(-1)).squeeze(-1)
-            ratio=torch.exp(new_log_probs-buffer_shfled['log_prob'][i*mini_batch_size:(i+1)*mini_batch_size])
+            # new_log_probs=dis.log_prob(old_action.unsqueeze(-1)).squeeze(-1)
+            new_log_probs=-((old_action-muu)**2)/(2*torch.exp(2*lggstd))-lggstd-0.9189385332
+            ratio=torch.clamp(torch.exp(new_log_probs-buffer_shfled['log_prob'][i*mini_batch_size:(i+1)*mini_batch_size]),0,5)
             surr1=ratio*buffer_shfled['A'][i*mini_batch_size:(i+1)*mini_batch_size]
             surr2=torch.clamp(ratio,1-e,1+e)*buffer_shfled['A'][i*mini_batch_size:(i+1)*mini_batch_size]
             actor_loss=-torch.mean(torch.min(surr1,surr2))
             critic_loss=torch.mean((V_pred-returns)**2)
-            entropy_loss=-torch.mean(dis.entropy())
+            entropy_loss=-torch.mean(lggstd)-1.418938533
             total_loss = actor_loss + c1 * critic_loss + c2 * entropy_loss
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
+            if torch.isnan(total_loss) or torch.isinf(total_loss):
+                print('NaN detected,skipping batch.')
+                optimizer.zero_grad(set_to_none=True)
+                continue
             # print('doing backward.')
             total_loss.backward()
             torch.nn.utils.clip_grad_norm_(mainNetwork.parameters(), 0.5)  # 梯度裁剪
