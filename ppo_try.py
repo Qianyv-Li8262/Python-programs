@@ -102,13 +102,13 @@ def chkdeath(y):
     return z.float()
 
 mainNetwork=Actor(7).to(device)
-# mainNetwork=torch.compile(mainNetwork,mode="reduce-overhead")
+mainNetwork=torch.compile(mainNetwork)
 mainNetwork2=Critic(7).to(device)
-# mainNetwork2=torch.compile(mainNetwork2,mode="reduce-overhead")
+mainNetwork2=torch.compile(mainNetwork2,mode="reduce-overhead")
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
 optimizer2=optim.Adam(mainNetwork2.parameters(),lr=0.0003)
 
-sample_batch_size=2048
+sample_batch_size=4096
 N=2 
 level=0
 max_level=10
@@ -213,6 +213,7 @@ for _ in range(MAX_EPISODE_NUMBER):
                 # torch.compiler.cudagraph_mark_step_begin() 
                 state_in=torch.stack([y0[:,0],torch.sin(y0[:,1]),torch.cos(y0[:,1]),torch.sin(2*y0[:,1]),torch.cos(2*y0[:,1]),y0[:,2],y0[:,3]],dim=-1)
                 mu,lgstd=mainNetwork(state_in)
+                # mu=mu.clone()
                 V=mainNetwork2(state_in)
                 # f=torch.clamp(mu+torch.randn_like(mu)*torch.exp(lgstd),-15,15)
                 # log_prob=-((f-mu)**2)/(2*torch.exp(2*lgstd))-lgstd-0.9189385332
@@ -267,17 +268,19 @@ for _ in range(MAX_EPISODE_NUMBER):
         buffer_shfled={}
         shfl_idx=torch.randperm(N*sample_batch_size*steps,device=device)
         for key,value in buffer.items():
-            buffer_shfled[key]=shfl(reshap(value),shfl_idx)
+            buffer_shfled[key]=reshap(value)
         ls=[]
         for i in range(u):
             start = i * mini_batch_size
             end = (i + 1) * mini_batch_size
-            b_state=buffer_shfled['state'][start:end,:]
+
+            batch_idx=shfl_idx[start:end]
+            b_state=buffer_shfled['state'][batch_idx,:]
             # muu,lggstd,V_pred=mainNetwork(b_state)
-            b_returns=buffer_shfled['R'][start:end]
-            b_actions=buffer_shfled['action'][start:end]
-            b_old_log_prob=buffer_shfled['log_prob'][start:end]
-            b_A=buffer_shfled['A'][start:end]
+            b_returns=buffer_shfled['R'][batch_idx]
+            b_actions=buffer_shfled['action'][batch_idx]
+            b_old_log_prob=buffer_shfled['log_prob'][batch_idx]
+            b_A=buffer_shfled['A'][batch_idx]
             total_loss=compute_loss(b_state,b_returns,b_actions,b_old_log_prob,b_A)
             # old_action=b_actions
             # # new_log_probs=dis.log_prob(old_action.unsqueeze(-1)).squeeze(-1)
