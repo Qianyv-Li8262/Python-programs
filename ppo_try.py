@@ -53,6 +53,7 @@ def chkdeath(y):
     return x.float()
 
 mainNetwork=ActorCritic(7).to(device)
+mainNetwork=torch.compile(mainNetwork)
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
 
 sample_batch_size=256
