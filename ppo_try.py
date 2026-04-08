@@ -193,5 +193,5 @@ for epoch in range(K):
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(mainNetwork.parameters(), 0.5)  # 梯度裁剪
         optimizer.step()
-torch.save(mainNetwork.state_dict(), "pendulum_controller_ppo.pth")
+torch.save(mainNetwork._orig_mod.state_dict(), "pendulum_controller_ppo.pth")
 print("权重已成功保存！")
