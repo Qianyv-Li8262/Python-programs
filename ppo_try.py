@@ -113,7 +113,7 @@ mainNetwork2=torch.compile(mainNetwork2,mode="reduce-overhead")
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
 optimizer2=optim.Adam(mainNetwork2.parameters(),lr=0.001)
 
-sample_batch_size=16384
+sample_batch_size=4096
 N=2 
 level=0
 max_level=10
@@ -133,7 +133,7 @@ gamma=0.95
 lamb=0.95
 K=7
 MAX_EPISODE_NUMBER=50
-mini_batch_size=4096
+mini_batch_size=1024
 e=0.2
 c1=0.5
 c2=0.02
