@@ -1,4 +1,6 @@
 import torch
+import torch._inductor.config as inductor_config
+inductor_config.cpp_wrapper = False 
 torch.set_float32_matmul_precision('high')
 import torch.nn as nn
 import torch.optim as optim
@@ -33,7 +35,7 @@ def rk2solver(y0,dt,f):
     v1=torch.stack([xdot,thdot,pxdot,pthdot],dim=-1)
     ymid=y0+dt/2*v1
     # return y0+dt*getDerivative(ymid,f)
-    
+
     y=ymid
     costh=torch.cos(y[...,1])
     sinth=torch.sin(y[...,1])
