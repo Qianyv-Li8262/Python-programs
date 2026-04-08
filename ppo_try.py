@@ -113,7 +113,7 @@ mainNetwork2=torch.compile(mainNetwork2,mode="reduce-overhead")
 optimizer=optim.Adam(mainNetwork.parameters(),lr=0.0003)
 optimizer2=optim.Adam(mainNetwork2.parameters(),lr=0.001)
 
-sample_batch_size=4096
+sample_batch_size=16384
 N=2 
 level=0
 max_level=10
@@ -132,8 +132,8 @@ def get_init(batch_size):
 gamma=0.95
 lamb=0.95
 K=7
-MAX_EPISODE_NUMBER=170
-mini_batch_size=2048
+MAX_EPISODE_NUMBER=50
+mini_batch_size=4096
 e=0.2
 c1=0.5
 c2=0.02
@@ -184,7 +184,9 @@ def sample_step(y0, net_mu, net_lgstd):
     f_sq=f.squeeze(-1)
     next_state=rk2solver(y0,dt,f_sq)
     rwd=reward(next_state,f_sq)
-    mask_death=(torch.abs(next_state[...,0])>5.0).float()
+    m1=torch.abs(next_state[...,0])>5.0
+    m2=torch.abs(next_state[...,2])>2.5
+    mask_death=torch.clip((m1+m2).float(),max=1)
     rwd = rwd - mask_death * 100.0
     return f_sq, log_prob.squeeze(-1), next_state, rwd, mask_death
 
@@ -314,8 +316,9 @@ for _ in range(MAX_EPISODE_NUMBER):
         print(f'epoch {epoch} ,loss {v}')
     uu=buffer['reward'].mean().item()
     print(f'\nAverage Reward={uu}')
-    if uu>0.6:
+    if uu>4:
         level+=0.05
-torch.save(mainNetwork.state_dict(), "pendulum_controller_ppo.pth")
-torch.save(mainNetwork2.state_dict(), "pendulum_controller_critic.pth")
+    print('level=',level)
+torch.save(mainNetwork._orig_mod.state_dict(), "pendulum_controller_ppo.pth")
+torch.save(mainNetwork2._orig_mod.state_dict(), "pendulum_controller_critic.pth")
 print("权重已成功保存！")
