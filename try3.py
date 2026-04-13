@@ -100,8 +100,8 @@ def step() -> bool:
                 if 0 <= ip < N and 0 <= jp < M:
                     if block[ip, jp] == 1:
                         f_eq[i, j][k] = f[i, j][opp[k]]
-                        momentum_y = 2.0 * f[i, j][opp[k]] * Vel[k][1]
-                        momentum_x = 2.0 * f[i, j][opp[k]] * Vel[k][0]
+                        momentum_y = 2.0 * f[i, j][opp[k]] * Vel[opp[k]][1]
+                        momentum_x = 2.0 * f[i, j][opp[k]] * Vel[opp[k]][0]
                         lift[None] += momentum_y
                         drag[None] += momentum_x
                     else:
