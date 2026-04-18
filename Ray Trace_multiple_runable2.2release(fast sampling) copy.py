@@ -56,7 +56,7 @@ zc1_arr=cp.asarray([l.zc1 for l in lenses],dtype=np.float32)
 zc2_arr=cp.asarray([l.zc2 for l in lenses],dtype=np.float32)
 n_arr=cp.asarray([nr,ng,nb],dtype=np.float32)
 
-cuda_source_code='''
+cuda_source_code=r'''
 __device__ unsigned int hash_rng(unsigned int seed) {
     seed ^= seed >> 16;
     seed *= 0x7feb352dU;
