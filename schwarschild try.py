@@ -33,6 +33,7 @@ def create_texture_object(img_cp):
     return tex_obj, rgba
 # 1. 使用 OpenCV 读取图片
 img_bgr = cv2.imread('eso0932a.jpg')
+# img_bgr = cv2.imread('test_img2.bmp')
 
 # 2. OpenCV 默认是 BGR 通道顺序，我们需要转成 RGB
 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -98,9 +99,9 @@ tot_pixels=1048576
 frames=1
 t0=time.time()
 trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
-(frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(20),cp.float32(0),cp.float32(0)   ,cp.float32(-1),cp.float32(0),cp.float32(0)
-    ,cp.float32(0),cp.float32(-1),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
-        cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000)))
+(frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(10),cp.float32(0),cp.float32(0)   ,cp.float32(-0.91651),cp.float32(0.4),cp.float32(0)
+    ,cp.float32(0.4),cp.float32(0.91651),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
+        cp.float32(2),cp.float32(2),cp.float32(30)  ,cp.float32(0.1),cp.int32(5000)))
 
 postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
 
