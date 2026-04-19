@@ -18,19 +18,93 @@ def create_texture_object(img_cp):
     res_ptr = texture.ResourceDescriptor(
         runtime.cudaResourceTypePitch2D, 
         arr=rgba,                  
-        chDesc=ch_fmt, 
+        chDesc=ch_fmt,  
         width=w,
         height=h,
         pitchInBytes=pitch_bytes
     )
     tex_ptr = texture.TextureDescriptor(
-        addressModes=(runtime.cudaAddressModeClamp, runtime.cudaAddressModeBorder),borderColors = (0.0,0.0,0.0,0.0),
+        addressModes=(runtime.cudaAddressModeWrap, runtime.cudaAddressModeClamp),
         filterMode=runtime.cudaFilterModeLinear,
-        readMode=runtime.cudaReadModeElementType
+        readMode=runtime.cudaReadModeElementType,
+        normalizedCoords=1
     )
     tex_obj = texture.TextureObject(res_ptr, tex_ptr)
     return tex_obj, rgba
+# 1. 使用 OpenCV 读取图片
+img_bgr = cv2.imread('eso0932a.jpg')
 
-# tex_handle, _internal_storage = create_texture_object(img) # img要在显卡里面
+# 2. OpenCV 默认是 BGR 通道顺序，我们需要转成 RGB
+img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+# 3. 归一化到 [0.0, 1.0] 并转为 float32
+img_float = img_rgb.astype(np.float32) 
+# img_float = img_rgb.astype(np.float32) / 255.0
+
+# 4. 将数据传送到 GPU (转为 CuPy 数组)
+img_cp = cp.array(img_float)
+tex_handle, _internal_storage = create_texture_object(img_cp) # img要在显卡里面
+
+with open("blackhole_kernel.cu", "r", encoding="utf-8") as f:
+    cuda_source = f.read()
 
 
+module = cp.RawModule(code=cuda_source, options=('-use_fast_math',))
+
+
+trace_rays_kernel = module.get_function("blackholekernel")
+
+postprocess_source=r'''
+extern "C" __global__
+void postprocess_kernel(
+    const float* __restrict__ accum,
+    unsigned char* __restrict__ pbo_out,
+    int total_pixels, int frames
+){
+    int pid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (pid >= total_pixels) return;
+    int r_idx = pid * 3;
+    int g_idx = pid * 3 + 1;
+    int b_idx = pid * 3 + 2;
+    float inv_frames = 1.0f / (float)frames;
+    float r = accum[r_idx] * inv_frames;
+    float g = accum[g_idx] * inv_frames;
+    float b = accum[b_idx] * inv_frames;
+    r = __powf(r, 0.4545f) * 255.0f;
+    g = __powf(g, 0.4545f) * 255.0f;
+    b = __powf(b, 0.4545f) * 255.0f;
+    r = fmaxf(0.0f, fminf(r, 255.0f));
+    g = fmaxf(0.0f, fminf(g, 255.0f));
+    b = fmaxf(0.0f, fminf(b, 255.0f));
+    // Output RGBA for OpenGL (BGR->RGB swap: accum is RGB already)
+    int out_idx = pid * 4;
+    pbo_out[out_idx + 0] = (unsigned char)r;
+    pbo_out[out_idx + 1] = (unsigned char)g;
+    pbo_out[out_idx + 2] = (unsigned char)b;
+    pbo_out[out_idx + 3] = 255;
+}
+'''
+
+postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
+
+
+w,h=1024,1024
+window=ZeroCopyWindow(w,h,'try')
+current_frame_float=window.map_pbo()
+frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
+grid_x,grid_y=32,32
+block_x,block_y=32,32
+tot_pixels=1048576
+frames=1
+trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
+(frame_intermediate_result, tex_handle.ptr,10,0,0   ,-1,0,0   ,0,-1,0   ,0,0,1   ,1024,1024,  1,1,3  ,0.1,2000))
+
+postprocess_kernel((1024,),(1024,),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
+
+window.unmap_and_draw()
+# flagg=True
+while not window.should_close():
+    glfw.wait_events()  # 使用 wait_events 而不是 poll_events，这样画面静止时不占用 CPU
+
+window.destroy()
+print('Done.')
