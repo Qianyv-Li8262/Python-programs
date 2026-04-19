@@ -32,7 +32,8 @@ def create_texture_object(img_cp):
     tex_obj = texture.TextureObject(res_ptr, tex_ptr)
     return tex_obj, rgba
 # 1. 使用 OpenCV 读取图片
-img_bgr = cv2.imread('eso0932a.jpg')
+# img_bgr = cv2.imread('eso0932a.jpg')
+img_bgr = cv2.imread('eso0932a.tif')
 # img_bgr = cv2.imread('test_img2.bmp')
 
 # 2. OpenCV 默认是 BGR 通道顺序，我们需要转成 RGB
@@ -89,41 +90,81 @@ void postprocess_kernel(
 postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
 
 print('kernel complied')
-w,h=1024,1024
+w,h=2048,2048
 window=ZeroCopyWindow(w,h,'try')
 # current_frame_float=window.map_pbo()
 frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
-accum=cp.empty((h * w * 3), dtype=cp.float32)
+accum=cp.zeros((h * w * 3), dtype=cp.float32)
 block_x,block_y=32,32
 grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
 grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
 print(grid_x)
 tot_pixels=w*h
 frames=1
-# t0=time.time()
-# trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
-# (frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(10),cp.float32(0),cp.float32(0)   ,cp.float32(-0.91651),cp.float32(0.4),cp.float32(0)
-#     ,cp.float32(0.4),cp.float32(0.91651),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
-#         cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000)))
 
-# postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
+cam_pos = np.array([10.0, 0.0, 0.0], dtype=np.float32)
+cam_yaw = np.pi
+cam_pitch = 0.0
+move_speed = 0.025
+turn_speed = 0.01
 
-# print('start.')
-# window.unmap_and_draw()
-# print('ended.')
-# t1=time.time()
-# print(f'{1/(t1-t0)}FPS')
-# flagg=True
 while not window.should_close():
     current_frame_float=window.map_pbo()
-    # glfw.wait_events()  # 使用 wait_events 而不是 poll_events，这样画面静止时不占用 CPU
+    
+    camera_moved = False
+    if glfw.KEY_W in window.key_pressed:
+        cam_pos[0] += np.cos(cam_yaw) * move_speed
+        cam_pos[1] += np.sin(cam_yaw) * move_speed
+        camera_moved = True
+    if glfw.KEY_S in window.key_pressed:
+        cam_pos[0] -= np.cos(cam_yaw) * move_speed
+        cam_pos[1] -= np.sin(cam_yaw) * move_speed
+        camera_moved = True
+    if glfw.KEY_D in window.key_pressed:
+        cam_pos[0] -= np.sin(cam_yaw) * move_speed
+        cam_pos[1] += np.cos(cam_yaw) * move_speed
+        camera_moved = True
+    if glfw.KEY_A in window.key_pressed:
+        cam_pos[0] += np.sin(cam_yaw) * move_speed
+        cam_pos[1] -= np.cos(cam_yaw) * move_speed
+        camera_moved = True
+    if glfw.KEY_Q in window.key_pressed:
+        cam_yaw -= turn_speed
+        camera_moved = True
+    if glfw.KEY_E in window.key_pressed:
+        cam_yaw += turn_speed
+        camera_moved = True
+        
+    if camera_moved:
+        accum.fill(0)
+        frames = 1
+        
+    fwd_x = np.cos(cam_yaw) * np.cos(cam_pitch)
+    fwd_y = np.sin(cam_yaw) * np.cos(cam_pitch)
+    fwd_z = np.sin(cam_pitch)
+    fwd = np.array([fwd_x, fwd_y, fwd_z], dtype=np.float32)
+    
+    world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+    right = np.cross(fwd, world_up)
+    right_norm = np.linalg.norm(right)
+    if right_norm > 1e-6:
+        right = right / right_norm
+    else:
+        right = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+    up = np.cross(right, fwd)
+
     trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
-    (frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(10),cp.float32(0),cp.float32(0)   ,cp.float32(-1),cp.float32(0),cp.float32(0)
-    ,cp.float32(0),cp.float32(1),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
-        cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000),cp.int32(10)))
-    accum = accum +frame_intermediate_result
-    frames+=1
-    postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(accum,current_frame_float,tot_pixels,frames))
+    (frame_intermediate_result, cp.uint64(tex_handle.ptr),
+     cp.float32(cam_pos[0]), cp.float32(cam_pos[1]), cp.float32(cam_pos[2]),
+     cp.float32(fwd[0]), cp.float32(fwd[1]), cp.float32(fwd[2]),
+     cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
+     cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
+     cp.int32(w), cp.int32(h),
+     cp.float32(2), cp.float32(2), cp.float32(0.5), cp.float32(0.1), cp.int32(5000), cp.int32(5)))
+    
+    accum = accum + frame_intermediate_result
+    postprocess_kernel((cp.int32(4096),),(cp.int32(1024),),(accum,current_frame_float,tot_pixels,frames))
+    frames += 1
     window.unmap_and_draw()
 
 window.destroy()
