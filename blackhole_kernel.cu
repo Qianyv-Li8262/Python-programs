@@ -118,10 +118,10 @@ if(r<0.501f || r>50.0f){flag = false;}
 }
 if (r < 0.501f) {
     // 掉进黑洞，涂黑
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 0] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 1] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 2] = 0.0f;
-    //raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 3] = 255f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
+
 } else {
 float3 final_dir = normalize(p);
 
@@ -139,7 +139,7 @@ float3 final_dir = normalize(p);
     float4 color = tex2D<float4>(tex_obj, u, v);
     
     // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
-    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 4;
+    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
     raw_img[pixel_index + 0] = color.x; // R
     raw_img[pixel_index + 1] = color.y; // G
     raw_img[pixel_index + 2] = color.z; // B
