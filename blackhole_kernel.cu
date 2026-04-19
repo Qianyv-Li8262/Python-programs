@@ -6,10 +6,15 @@ __device__ __forceinline__ float3 normalize(float3 v){
 __device__ __forceinline__ float3 operator+(float3 a, float3 b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
-
+__device__ __forceinline__ float4 operator+(float4 a, float4 b) {
+    return make_float4(a.x + b.x, a.y + b.y, a.z + b.z,a.w +b.w);
+}
 
 __device__ __forceinline__ float3 operator*(float3 a, float s) {
     return make_float3(a.x * s, a.y * s, a.z * s);
+}
+__device__ __forceinline__ float4 operator*(float4 a, float s) {
+    return make_float4(a.x * s, a.y * s, a.z * s,a.w * s);
 }
 __device__ __forceinline__ float3 operator*(float s, float3 a) {
     return make_float3(a.x * s, a.y * s, a.z * s);
@@ -17,6 +22,15 @@ __device__ __forceinline__ float3 operator*(float s, float3 a) {
 
 __device__ __forceinline__ float length(float3 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+__device__ __forceinline__ float rand_float(unsigned int seed) {
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return (float)seed / 4294967296.0f; // 归一化到 [0, 1)
 }
 
 extern "C" __global__
@@ -37,15 +51,15 @@ const float up_y,
 const float up_z,
 const int imgwidth,const int imgheight,
 const float physwidth,const float physheight,
-const float focal_length,const float step,const int maxstep
+const float focal_length,const float step,const int maxstep,const int jitternum
 
 ){
 
 
 
 //打包成向量
-float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
-float r = length(cam_pos);
+// float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
+// float r = length(cam_pos);
 float3 fwd = make_float3(fwd_x,fwd_y,fwd_z);
 float3 right = make_float3(right_x,right_y,right_z);
 float3 up = make_float3(up_x,up_y,up_z);
@@ -56,10 +70,14 @@ int pixel_idx = blockIdx.x * blockDim.x + threadIdx.x;
 int pixel_idy = blockIdx.y * blockDim.y + threadIdx.y;
 
 if( pixel_idx >= imgwidth || pixel_idy >= imgheight ) return;
-
-float physical_x = (((float)pixel_idx+0.5f)/(float)imgwidth - 0.5f) * physwidth;
-float physical_y = (((float)pixel_idy+0.5f)/(float)imgheight - 0.5f) * physheight;
-
+float4 buffer=make_float4(0.0f,0.0f,0.0f,0.0f);
+float jitterx = rand_float((unsigned int)pixel_idx);
+float jittery = rand_float((unsigned int)pixel_idy);
+float physical_x = (((float)pixel_idx+jitterx)/(float)imgwidth - 0.5f) * physwidth;
+float physical_y = (((float)pixel_idy+jittery)/(float)imgheight - 0.5f) * physheight;
+for(int i = 0;i < jitternum;++i){
+float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
+float r = length(cam_pos);
 float3 d = make_float3(
     fwd.x * focal_length - right.x * physical_x - up.x * physical_y,
     fwd.y * focal_length - right.y * physical_x - up.y * physical_y,
@@ -163,6 +181,7 @@ if(r<0.55f || r>50.0f || isnan(r)){flag = false;}
 //     raw_img[pixel_index + 0] = color.x; // R
 //     raw_img[pixel_index + 1] = color.y; // G
 //     raw_img[pixel_index + 2] = color.z; // B
+float4 color;
 if (r >=0.55f && !isnan(r)) {
     // 掉进黑洞，涂黑
 
@@ -180,20 +199,28 @@ float3 final_dir = normalize(p);
     
     // 5. 使用 CUDA 硬件纹理采样 (tex2D)
     // tex2D 会自动处理双线性插值和边界环绕
-    float4 color = tex2D<float4>(tex_obj, tex_u, tex_v);
+    color = tex2D<float4>(tex_obj, tex_u, tex_v);
     
-    // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
-    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
-    raw_img[pixel_index + 0] = color.x; // R
-    raw_img[pixel_index + 1] = color.y; // G
-    raw_img[pixel_index + 2] = color.z; // B
+    // // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
+    // int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
+    // raw_img[pixel_index + 0] = color.x; // R
+    // raw_img[pixel_index + 1] = color.y; // G
+    // raw_img[pixel_index + 2] = color.z; // B
 
 
 
 
 } else {
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
+    // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
+    // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
+    // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
+    color=make_float4(0.0f,0.0f,0.0f,1.0f);
 }
+buffer = buffer+color;
+}
+buffer = buffer*(1.0f/(float)jitternum);
+    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
+    raw_img[pixel_index + 0] = buffer.x; // R
+    raw_img[pixel_index + 1] = buffer.y; // G
+    raw_img[pixel_index + 2] = buffer.z; // B
 }

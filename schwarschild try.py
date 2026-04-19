@@ -118,9 +118,9 @@ while not window.should_close():
     current_frame_float=window.map_pbo()
     # glfw.wait_events()  # 使用 wait_events 而不是 poll_events，这样画面静止时不占用 CPU
     trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
-    (frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(10),cp.float32(0),cp.float32(0)   ,cp.float32(-0.91651),cp.float32(0.4),cp.float32(0)
-    ,cp.float32(0.4),cp.float32(0.91651),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
-        cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000)))
+    (frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(10),cp.float32(0),cp.float32(0)   ,cp.float32(-1),cp.float32(0),cp.float32(0)
+    ,cp.float32(0),cp.float32(1),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
+        cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000),cp.int32(10)))
     accum = accum +frame_intermediate_result
     frames+=1
     postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(accum,current_frame_float,tot_pixels,frames))
