@@ -5,6 +5,7 @@ import time
 from cupy.cuda import texture
 from cupy.cuda import runtime
 import glfw
+import os
 from zero_copy_window import ZeroCopyWindow
 def create_texture_object(img_cp):
     h, w, c = img_cp.shape
@@ -32,9 +33,22 @@ def create_texture_object(img_cp):
     tex_obj = texture.TextureObject(res_ptr, tex_ptr)
     return tex_obj, rgba
 
-# img_bgr = cv2.imread('eso0932a.jpg')
-img_bgr = cv2.imread('eso0932a.tif')
-# img_bgr = cv2.imread('test_img2.bmp')
+
+
+
+base_path = os.path.dirname(os.path.abspath(__file__))
+img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
+img_bgr = cv2.imread(img_file_path)
+
+
+
+
+if img_bgr is None:
+    print(f"错误：无法在路径 {img_file_path} 找到背景图片！")
+    print("请检查图片文件名是否正确，或者图片是否在文件夹中。")
+    exit() 
+
+img_bgr = cv2.imread(img_file_path)
 
 
 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -42,7 +56,9 @@ img_float = img_rgb.astype(np.float32) / 255.0
 img_cp = cp.array(img_float)
 tex_handle, _internal_storage = create_texture_object(img_cp)
 
-with open("blackhole_kernel.cu", "r", encoding="utf-8") as f:
+
+kernel_path = os.path.join(base_path, "blackhole_kernel.cu")
+with open(kernel_path, "r", encoding="utf-8") as f:
     cuda_source = f.read()
 
 
@@ -85,18 +101,13 @@ void postprocess_kernel(
 postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
 
 print('kernel complied')
-w,h=2048,2048
-window=ZeroCopyWindow(w,h,'try')
-# current_frame_float=window.map_pbo()
-frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
-accum=cp.zeros((h * w * 3), dtype=cp.float32)
-block_x,block_y=32,32
-grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
-grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
-print(grid_x)
-tot_pixels=w*h
-frames=1
 
+
+
+# 超参数！
+
+
+w,h=2048,2048
 
 cam_pos = np.array([10.0, 0.0, 0.0], dtype=np.float32)
 cam_yaw = np.pi
@@ -105,16 +116,29 @@ cam_roll = 0.0
 
 move_speed = 0.025
 turn_speed = 0.01
+focus_speed=0.01
+jitnum=5
+
+focal_length=1.0
 
 
+
+
+window=ZeroCopyWindow(w,h,'try')
+frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
+accum=cp.zeros((h * w * 3), dtype=cp.float32)
+block_x,block_y=32,32
+grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
+grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
+print(grid_x)
+tot_pixels=w*h
+frames=1
 world_up = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-
 fwd_x = np.cos(cam_yaw) * np.cos(cam_pitch)
 fwd_y = np.sin(cam_yaw) * np.cos(cam_pitch)
 fwd_z = np.sin(cam_pitch)
 fwd = np.array([fwd_x, fwd_y, fwd_z], dtype=np.float32)
 fwd /= np.linalg.norm(fwd)
-
 right0 = np.cross(fwd, world_up)
 right_norm = np.linalg.norm(right0)
 if right_norm > 1e-6:
@@ -123,8 +147,6 @@ else:
     right0 = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 up0 = np.cross(right0, fwd)
 up0 /= np.linalg.norm(up0)
-
-
 right = right0 * np.cos(cam_roll) + up0 * np.sin(cam_roll)
 up = up0 * np.cos(cam_roll) - right0 * np.sin(cam_roll)
 
@@ -170,6 +192,12 @@ while not window.should_close():
     if glfw.KEY_C in window.key_pressed: 
         cam_roll += turn_speed
         camera_moved = True
+    if glfw.KEY_G in window.key_pressed: 
+        focal_length -= focus_speed
+        camera_moved = True
+    if glfw.KEY_T in window.key_pressed: 
+        focal_length += focus_speed
+        camera_moved = True
     if camera_moved:
         accum.fill(0)
         frames = 1
@@ -197,10 +225,10 @@ while not window.should_close():
          cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
          cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
          cp.int32(w), cp.int32(h),
-         cp.float32(2), cp.float32(2), cp.float32(0.5), cp.float32(0.1), cp.int32(5000), cp.int32(5)))
+         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(5000), cp.int32(jitnum)))
     
     accum = accum + frame_intermediate_result
-    postprocess_kernel((cp.int32(4096),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
+    postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
     frames += 1
     window.unmap_and_draw()
 
