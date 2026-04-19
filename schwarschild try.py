@@ -96,15 +96,19 @@ grid_x,grid_y=32,32
 block_x,block_y=32,32
 tot_pixels=1048576
 frames=1
+t0=time.time()
 trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
 (frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(20),cp.float32(0),cp.float32(0)   ,cp.float32(-1),cp.float32(0),cp.float32(0)
     ,cp.float32(0),cp.float32(-1),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
         cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000)))
 
 postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
+
 print('start.')
 window.unmap_and_draw()
 print('ended.')
+t1=time.time()
+print(f'{1/(t1-t0)}FPS')
 # flagg=True
 while not window.should_close():
     glfw.wait_events()  # 使用 wait_events 而不是 poll_events，这样画面静止时不占用 CPU
