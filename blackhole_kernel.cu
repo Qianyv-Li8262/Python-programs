@@ -116,13 +116,37 @@ p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
 r = length(cam_pos);
 if(r<0.501f || r>50.0f){flag = false;}
 }
-if (r < 0.501f) {
-    // 掉进黑洞，涂黑
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
-    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
+// if (r < 0.501f) {
+//     // 掉进黑洞，涂黑
+//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
+//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
+//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
 
-} else {
+// } else {
+// float3 final_dir = normalize(p);
+
+//     float phi = atan2f(final_dir.z, final_dir.x); 
+//     float theta = asinf(final_dir.y);
+
+//     float u = (phi + 3.14159265f) * 0.1591549f;
+//     float v = (theta + 1.57079633f) * 0.3183099f;
+    
+
+//     // v = 1.0f - v; 
+    
+//     // 5. 使用 CUDA 硬件纹理采样 (tex2D)
+//     // tex2D 会自动处理双线性插值和边界环绕
+//     float4 color = tex2D<float4>(tex_obj, u, v);
+    
+//     // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
+//     int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
+//     raw_img[pixel_index + 0] = color.x; // R
+//     raw_img[pixel_index + 1] = color.y; // G
+//     raw_img[pixel_index + 2] = color.z; // B
+if (r >50.0f) {
+    // 掉进黑洞，涂黑
+
+
 float3 final_dir = normalize(p);
 
     float phi = atan2f(final_dir.z, final_dir.x); 
@@ -143,5 +167,13 @@ float3 final_dir = normalize(p);
     raw_img[pixel_index + 0] = color.x; // R
     raw_img[pixel_index + 1] = color.y; // G
     raw_img[pixel_index + 2] = color.z; // B
+
+
+
+
+} else {
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
 }
 }
