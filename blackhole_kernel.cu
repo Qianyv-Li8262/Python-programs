@@ -37,9 +37,11 @@ const float up_y,
 const float up_z,
 const int imgwidth,const int imgheight,
 const float physwidth,const float physheight,
-const float focal_length,const float step
+const float focal_length,const float step,const int maxstep
 
 ){
+
+
 
 //打包成向量
 float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
@@ -78,8 +80,11 @@ float g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
 float3 k11 = p;
 float3 k12 = g * cam_pos;
 
-float3 k21 = p+(step/2.0f)*k12;
-float3 pos_tmp=cam_pos+(step/2.0f)*k11;
+//自适应步长
+float current_step = step * fmaxf(0.1f, (r - 0.5f)); // 离黑洞越近，步长越小
+
+float3 k21 = p+(current_step/2.0f)*k12;
+float3 pos_tmp=cam_pos+(current_step/2.0f)*k11;
 r = length(pos_tmp);
 u=__frcp_rn(2.0f * r);
 upl = 1.0f+u;
@@ -87,8 +92,8 @@ umi = 1.0f-u;
 g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
 float3 k22 = pos_tmp * g;
 
-float3 k31 = p+(step/2.0f)*k22;
-pos_tmp=cam_pos+(step/2.0f)*k21;
+float3 k31 = p+(current_step/2.0f)*k22;
+pos_tmp=cam_pos+(current_step/2.0f)*k21;
 r = length(pos_tmp);
 u=__frcp_rn(2.0f * r);
 upl = 1.0f+u;
@@ -96,8 +101,8 @@ umi = 1.0f-u;
 g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
 float3 k32 = pos_tmp * g;
 
-float3 k41 = p + step*k32;
-pos_tmp=cam_pos+ step*k31;
+float3 k41 = p + current_step*k32;
+pos_tmp=cam_pos+ current_step*k31;
 r = length(pos_tmp);
 u=__frcp_rn(2.0f * r);
 upl = 1.0f+u;
@@ -106,10 +111,37 @@ g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
 float3 k42 = pos_tmp * g;
 
 
-cam_pos = cam_pos+(step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
-p = p+(step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
-r = length(pos_tmp);
-if(r<0.501f || r>50.0f){flag = false};
+cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
+p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
+r = length(cam_pos);
+if(r<0.501f || r>50.0f){flag = false;}
 }
+if (r < 0.501f) {
+    // 掉进黑洞，涂黑
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 0] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 1] = 0.0f;
+    raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 2] = 0.0f;
+    //raw_img[(pixel_idy * imgwidth + pixel_idx) * 4 + 3] = 255f;
+} else {
+float3 final_dir = normalize(p);
 
+    float phi = atan2f(final_dir.z, final_dir.x); 
+    float theta = asinf(final_dir.y);
+
+    float u = (phi + 3.14159265f) * 0.1591549f;
+    float v = (theta + 1.57079633f) * 0.3183099f;
+    
+
+    // v = 1.0f - v; 
+    
+    // 5. 使用 CUDA 硬件纹理采样 (tex2D)
+    // tex2D 会自动处理双线性插值和边界环绕
+    float4 color = tex2D<float4>(tex_obj, u, v);
+    
+    // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
+    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 4;
+    raw_img[pixel_index + 0] = color.x; // R
+    raw_img[pixel_index + 1] = color.y; // G
+    raw_img[pixel_index + 2] = color.z; // B
+}
 }
