@@ -38,8 +38,8 @@ img_bgr = cv2.imread('eso0932a.jpg')
 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
 # 3. 归一化到 [0.0, 1.0] 并转为 float32
-img_float = img_rgb.astype(np.float32) 
-# img_float = img_rgb.astype(np.float32) / 255.0
+# img_float = img_rgb.astype(np.float32) 
+img_float = img_rgb.astype(np.float32) / 255.0
 
 # 4. 将数据传送到 GPU (转为 CuPy 数组)
 img_cp = cp.array(img_float)
@@ -87,7 +87,7 @@ void postprocess_kernel(
 
 postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
 
-
+print('kernel complied')
 w,h=1024,1024
 window=ZeroCopyWindow(w,h,'try')
 current_frame_float=window.map_pbo()
@@ -97,11 +97,14 @@ block_x,block_y=32,32
 tot_pixels=1048576
 frames=1
 trace_rays_kernel((grid_x, grid_y,), (block_x, block_y,), 
-(frame_intermediate_result, tex_handle.ptr,10,0,0   ,-1,0,0   ,0,-1,0   ,0,0,1   ,1024,1024,  1,1,3  ,0.1,2000))
+(frame_intermediate_result, cp.uint64(tex_handle.ptr),cp.float32(20),cp.float32(0),cp.float32(0)   ,cp.float32(-1),cp.float32(0),cp.float32(0)
+    ,cp.float32(0),cp.float32(-1),cp.float32(0)   ,cp.float32(0),cp.float32(0),cp.float32(1)   ,cp.int32(1024),cp.int32(1024),
+        cp.float32(2),cp.float32(2),cp.float32(0.5)  ,cp.float32(0.1),cp.int32(5000)))
 
-postprocess_kernel((1024,),(1024,),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
-
+postprocess_kernel((cp.int32(1024),),(cp.int32(1024),),(frame_intermediate_result,current_frame_float,tot_pixels,frames))
+print('start.')
 window.unmap_and_draw()
+print('ended.')
 # flagg=True
 while not window.should_close():
     glfw.wait_events()  # 使用 wait_events 而不是 poll_events，这样画面静止时不占用 CPU

@@ -1,5 +1,5 @@
 __device__ __forceinline__ float3 normalize(float3 v){
-    float inv_norm = __rsqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    float inv_norm = rsqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     return make_float3(v.x*inv_norm , v.y*inv_norm , v.z*inv_norm);
 }
 
@@ -16,7 +16,7 @@ __device__ __forceinline__ float3 operator*(float s, float3 a) {
 }
 
 __device__ __forceinline__ float length(float3 v) {
-    return __sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
 extern "C" __global__
@@ -67,7 +67,7 @@ float3 d = make_float3(
     );
 // 出射单位向量
 d=normalize(d);
-float u=__frcp_rn(2.0f * r);
+float u=1.0f/(2.0f * r);
 float upl = 1.0f+u;
 float umi = 1.0f-u;
 float n=upl*upl*upl/umi;
@@ -76,45 +76,65 @@ bool flag = true;
 
 
 for (int s = 0 ; s < maxstep && flag ; ++s){
-float g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
-float3 k11 = p;
+    //step 1
+u=1.0f/(2.0f * r);
+upl = 1.0f+u;
+umi = 1.0f-u;
+float g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
+float uu=1.0f/(upl*upl*upl*upl);
+float3 k11 = p * uu;
 float3 k12 = g * cam_pos;
 
 //自适应步长
-float current_step = step * fmaxf(0.1f, (r - 0.5f)); // 离黑洞越近，步长越小
 
-float3 k21 = p+(current_step/2.0f)*k12;
+        // float n_current = upl * upl * upl / umi;
+        // // 限制真实空间的移动步幅：越靠近视界 (0.5) 步幅越小，防止“瞬移过冲”
+        // float spatial_step = step * fminf(5.0f, fmaxf(0.05f, r - 0.505f)); 
+        // // 将空间步长转换为 RK4 需要的参数步长
+        // float current_step = spatial_step / n_current; 
+
+// float current_step = step * fmaxf(0.02f, (r - 0.55f)); // 离黑洞越近，步长越小
+float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.55f))); 
+
+//step 2
 float3 pos_tmp=cam_pos+(current_step/2.0f)*k11;
 r = length(pos_tmp);
-u=__frcp_rn(2.0f * r);
+u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
+g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
+uu=1.0f/(upl*upl*upl*upl);
+float3 k21 = (p+(current_step/2.0f)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
-float3 k31 = p+(current_step/2.0f)*k22;
+//step 3
 pos_tmp=cam_pos+(current_step/2.0f)*k21;
 r = length(pos_tmp);
-u=__frcp_rn(2.0f * r);
+u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
+g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
+uu=1.0f/(upl*upl*upl*upl);
+float3 k31 = (p+(current_step/2.0f)*k22)*uu;
 float3 k32 = pos_tmp * g;
 
-float3 k41 = p + current_step*k32;
+//step 4
 pos_tmp=cam_pos+ current_step*k31;
 r = length(pos_tmp);
-u=__frcp_rn(2.0f * r);
+u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -__frcp_rn(r*r*r*umi*umi*umi)*upl*upl*upl*upl*upl*(2.0f-u);
+g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
+uu=1.0f/(upl*upl*upl*upl);
+float3 k41 = (p + current_step*k32)*uu;
 float3 k42 = pos_tmp * g;
 
-
+//concatenate
 cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
 p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
 r = length(cam_pos);
-if(r<0.501f || r>50.0f){flag = false;}
+
+if(r<0.55f || r>50.0f || isnan(r)){flag = false;}
 }
 // if (r < 0.501f) {
 //     // 掉进黑洞，涂黑
@@ -143,24 +163,24 @@ if(r<0.501f || r>50.0f){flag = false;}
 //     raw_img[pixel_index + 0] = color.x; // R
 //     raw_img[pixel_index + 1] = color.y; // G
 //     raw_img[pixel_index + 2] = color.z; // B
-if (r >50.0f) {
+if (r >=0.55f && !isnan(r)) {
     // 掉进黑洞，涂黑
 
 
 float3 final_dir = normalize(p);
 
-    float phi = atan2f(final_dir.z, final_dir.x); 
-    float theta = asinf(final_dir.y);
+    float phi = atan2f(final_dir.y, -final_dir.x); 
+    float theta = asinf(-final_dir.z);
 
-    float u = (phi + 3.14159265f) * 0.1591549f;
-    float v = (theta + 1.57079633f) * 0.3183099f;
+    float tex_u = phi*0.1591549f+0.5f;
+    float tex_v = theta* 0.3183099f+0.5f;
     
 
     // v = 1.0f - v; 
     
     // 5. 使用 CUDA 硬件纹理采样 (tex2D)
     // tex2D 会自动处理双线性插值和边界环绕
-    float4 color = tex2D<float4>(tex_obj, u, v);
+    float4 color = tex2D<float4>(tex_obj, tex_u, tex_v);
     
     // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
     int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
