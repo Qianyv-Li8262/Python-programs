@@ -91,9 +91,11 @@ float umi = 1.0f-u;
 float n=upl*upl*upl/umi;
 float3 p = d * n;
 bool flag = true;
+bool hit_disk=false;
 
 
 for (int s = 0 ; s < maxstep && flag ; ++s){
+    float z_prev = cam_pos.z;
     //step 1
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
@@ -151,39 +153,18 @@ float3 k42 = pos_tmp * g;
 cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
 p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
 r = length(cam_pos);
-
-if(r<0.55f || r>50.0f || isnan(r)){flag = false;}
+// hit_disk = z_prev*cam_pos.z<0.0f && r>1.5f && r<8.0f;
+if(r<0.55f || r>50.0f || isnan(r) || hit_disk){flag = false;}
 }
-// if (r < 0.501f) {
-//     // 掉进黑洞，涂黑
-//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
-//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
-//     raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
 
-// } else {
-// float3 final_dir = normalize(p);
-
-//     float phi = atan2f(final_dir.z, final_dir.x); 
-//     float theta = asinf(final_dir.y);
-
-//     float u = (phi + 3.14159265f) * 0.1591549f;
-//     float v = (theta + 1.57079633f) * 0.3183099f;
-    
-
-//     // v = 1.0f - v; 
-    
-//     // 5. 使用 CUDA 硬件纹理采样 (tex2D)
-//     // tex2D 会自动处理双线性插值和边界环绕
-//     float4 color = tex2D<float4>(tex_obj, u, v);
-    
-//     // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
-//     int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
-//     raw_img[pixel_index + 0] = color.x; // R
-//     raw_img[pixel_index + 1] = color.y; // G
-//     raw_img[pixel_index + 2] = color.z; // B
 float4 color;
-if (r >=0.55f && !isnan(r)) {
-    // 掉进黑洞，涂黑
+if (hit_disk){
+    
+    
+    color=make_float4(1.0f,0.0f,0.0f,1.0f);
+}
+else {if (r >=0.55f && !isnan(r)) {
+
 
 
 float3 final_dir = normalize(p);
@@ -215,6 +196,7 @@ float3 final_dir = normalize(p);
     // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
     // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
     color=make_float4(0.0f,0.0f,0.0f,1.0f);
+}
 }
 buffer = buffer+color;
 }

@@ -108,8 +108,9 @@ print('kernel complied')
 
 
 w,h=2048,2048
-
-cam_pos = np.array([10.0, 0.0, 0.0], dtype=np.float32)
+r=10.0
+th=0
+cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
 cam_yaw = np.pi
 cam_pitch = 0.0
 cam_roll = 0.0 
@@ -117,7 +118,7 @@ cam_roll = 0.0
 move_speed = 0.025
 turn_speed = 0.01
 focus_speed=0.01
-jitnum=2
+jitnum=5
 
 focal_length=1.0
 
@@ -153,7 +154,8 @@ up = up0 * np.cos(cam_roll) - right0 * np.sin(cam_roll)
 
 while not window.should_close():
     current_frame_float = window.map_pbo()
-    
+    # th+=0.001
+    # cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
     camera_moved = False
     
     if glfw.KEY_W in window.key_pressed:
@@ -231,6 +233,7 @@ while not window.should_close():
     postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
     frames += 1
     window.unmap_and_draw()
+
 
 window.destroy()
 print('Done.')
