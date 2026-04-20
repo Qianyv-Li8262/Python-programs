@@ -95,7 +95,7 @@ bool hit_disk=false;
 
 
 for (int s = 0 ; s < maxstep && flag ; ++s){
-    float z_prev = cam_pos.z;
+    float3 prev_pos = cam_pos;
     //step 1
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
@@ -154,7 +154,16 @@ cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
 p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
 r = length(cam_pos);
 // hit_disk = z_prev*cam_pos.z<0.0f && r>1.5f && r<8.0f;
-if(r<0.55f || r>50.0f || isnan(r) || hit_disk){flag = false;}
+if (prev_pos.z * cam_pos.z<0.0f){
+float alpha = cam_pos.z/(cam_pos.z-prev_pos.z);
+float beta = 1.0f - alpha;
+float3 intersect = alpha * prev_pos + beta * cam_pos;
+float r_disk = sqrtf(intersect.x*intersect.x+intersect.y*intersect.y);
+if (r_disk < 8.0f && r_disk>1.5f) {
+    hit_disk = true;
+}
+}
+if(r<0.55f || r>50.0f || isnan(r) || hit_disk) {flag = false;}
 }
 
 float4 color;
