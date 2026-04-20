@@ -91,7 +91,8 @@ float umi = 1.0f-u;
 float n=upl*upl*upl/umi;
 float3 p = d * n;
 bool flag = true;
-bool hit_disk=false;
+float4 accumulated_color = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+// bool hit_disk=false;
 
 
 for (int s = 0 ; s < maxstep && flag ; ++s){
@@ -160,19 +161,29 @@ float beta = 1.0f - alpha;
 float3 intersect = alpha * prev_pos + beta * cam_pos;
 float r_disk = sqrtf(intersect.x*intersect.x+intersect.y*intersect.y);
 if (r_disk < 8.0f && r_disk>1.5f) {
-    hit_disk = true;
+
+    float intensity = 2.0f / (r_disk - 0.5f);
+    float opacity = 0.5f; // 透明度：0=完全透明，1=完全不透明
+float4 disk_color = make_float4(
+                intensity, 
+                0.3f * intensity, 
+                0.1f * intensity, 
+                opacity
+            );
+            accumulated_color.x += disk_color.x * disk_color.w * (1.0f - accumulated_color.w);
+            accumulated_color.y += disk_color.y * disk_color.w * (1.0f - accumulated_color.w);
+            accumulated_color.z += disk_color.z * disk_color.w * (1.0f - accumulated_color.w);
+            accumulated_color.w += disk_color.w * (1.0f - accumulated_color.w);
+    if (accumulated_color.w > 0.99f) {
+        flag = false;
 }
 }
-if(r<0.55f || r>50.0f || isnan(r) || hit_disk) {flag = false;}
+}
+if(r<0.55f || r>50.0f || isnan(r)) {flag = false;}
 }
 
 float4 color;
-if (hit_disk){
-    
-    
-    color=make_float4(1.0f,0.0f,0.0f,1.0f);
-}
-else {if (r >=0.55f && !isnan(r)) {
+if (r >=0.55f && !isnan(r)) {
 
 
 
@@ -189,8 +200,8 @@ float3 final_dir = normalize(p);
     
     // 5. 使用 CUDA 硬件纹理采样 (tex2D)
     // tex2D 会自动处理双线性插值和边界环绕
-    color = tex2D<float4>(tex_obj, tex_u, tex_v);
-    
+    float4 bkgd = tex2D<float4>(tex_obj, tex_u, tex_v);
+    color = accumulated_color + bkgd * (1.0f - accumulated_color.w);
     // // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
     // int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
     // raw_img[pixel_index + 0] = color.x; // R
@@ -204,9 +215,9 @@ float3 final_dir = normalize(p);
     // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 0] = 0.0f;
     // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 1] = 0.0f;
     // raw_img[(pixel_idy * imgwidth + pixel_idx) * 3 + 2] = 0.0f;
-    color=make_float4(0.0f,0.0f,0.0f,1.0f);
+color = accumulated_color + make_float4(0.0f, 0.0f, 0.0f, 1.0f) * (1.0f - accumulated_color.w);
 }
-}
+
 buffer = buffer+color;
 }
 buffer = buffer*(1.0f/(float)jitternum);
