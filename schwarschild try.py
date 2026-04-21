@@ -37,7 +37,7 @@ def create_texture_object(img_cp):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'black.bmp')#改图片
+img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 
