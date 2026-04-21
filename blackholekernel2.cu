@@ -88,7 +88,9 @@ __device__ float3 temperature_to_color(float temp) {
         b = 0.543206789f * logf(t - 10.0f) - 1.196254089f;
         b = fminf(1.0f, fmaxf(0.0f, b));
     }
-    
+            r = fminf(1.0f, fmaxf(0.0f, r));
+    g = fminf(1.0f, fmaxf(0.0f, g));
+    b = fminf(1.0f, fmaxf(0.0f, b));
     return make_float3(r, g, b);
 }
 
@@ -124,7 +126,7 @@ __device__ float disk_density(float3 pos, float r_disk) {
     float density = vertical_density * radial_density * turbulence * spiral_pattern;
     
     // 密度缩放因子（控制整体不透明度）
-    density *= 2.5f;
+    density *= 0.6f;
     
     return fmaxf(0.0f, density);
 }
@@ -134,7 +136,7 @@ __device__ float disk_temperature(float r_disk) {
     // 标准薄盘温度分布：T ∝ r^(-3/4)
     // 内圈高温（蓝白色），外圈低温（橙红色）
     
-    float T0 = 8000.0f; // 参考温度（开尔文）
+    float T0 = 4000.0f; // 参考温度（开尔文）
     float r0 = 3.0f;    // 参考半径
     
     float temp = T0 * powf(r_disk / r0, -0.75f);
@@ -237,6 +239,8 @@ float4 accumulated_color = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
 for (int s = 0 ; s < maxstep && flag ; ++s){
     float3 prev_pos = cam_pos;
+
+    
     //step 1
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;

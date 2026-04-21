@@ -57,7 +57,7 @@ img_cp = cp.array(img_float)
 tex_handle, _internal_storage = create_texture_object(img_cp)
 
 
-kernel_path = os.path.join(base_path, "blackhole_kernel.cu")
+kernel_path = os.path.join(base_path, "blackholekernel2.cu")
 with open(kernel_path, "r", encoding="utf-8") as f:
     cuda_source = f.read()
 
@@ -83,6 +83,16 @@ void postprocess_kernel(
     float r = accum[r_idx] * inv_frames;
     float g = accum[g_idx] * inv_frames;
     float b = accum[b_idx] * inv_frames;
+
+    float exposure = 1.2f;
+    r *= exposure; g *= exposure; b *= exposure;
+
+    // 3. ACES Filmic Tone Mapping (保留亮度时的色彩饱和度)
+    float a = 2.51f, b_c = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    r = (r * (a * r + b_c)) / (r * (c * r + d) + e);
+    g = (g * (a * g + b_c)) / (g * (c * g + d) + e);
+    b = (b * (a * b + b_c)) / (b * (c * b + d) + e);
+    
     r = __powf(r, 0.4545f) * 255.0f;
     g = __powf(g, 0.4545f) * 255.0f;
     b = __powf(b, 0.4545f) * 255.0f;
