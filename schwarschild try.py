@@ -37,7 +37,7 @@ def create_texture_object(img_cp):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
+img_file_path = os.path.join(base_path, 'black.bmp')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 
@@ -83,9 +83,16 @@ void postprocess_kernel(
     float r = accum[r_idx] * inv_frames;
     float g = accum[g_idx] * inv_frames;
     float b = accum[b_idx] * inv_frames;
+    float black_level = 0.03f; 
+    r = fmaxf(0.0f, r - black_level);
+    g = fmaxf(0.0f, g - black_level);
+    b = fmaxf(0.0f, b - black_level);
 
-    float exposure = 1.2f;
+
+    float exposure = 1.3f;
     r *= exposure; g *= exposure; b *= exposure;
+    //float exposure = 1.2f;
+    //r *= exposure; g *= exposure; b *= exposure;
 
     // 3. ACES Filmic Tone Mapping (保留亮度时的色彩饱和度)
     float a = 2.51f, b_c = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
@@ -118,7 +125,7 @@ print('kernel complied')
 
 
 w,h=2048,2048
-r=10.0
+r=20.0
 th=0
 cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
 cam_yaw = np.pi
@@ -128,7 +135,7 @@ cam_roll = 0.0
 move_speed = 0.025
 turn_speed = 0.01
 focus_speed=0.01
-jitnum=5
+jitnum=1
 
 focal_length=1.0
 

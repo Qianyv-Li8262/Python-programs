@@ -6,6 +6,9 @@ __device__ __forceinline__ float3 normalize(float3 v){
 __device__ __forceinline__ float3 operator+(float3 a, float3 b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
+__device__ __forceinline__ float3 operator-(float3 a, float3 b) {
+    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
 __device__ __forceinline__ float4 operator+(float4 a, float4 b) {
     return make_float4(a.x + b.x, a.y + b.y, a.z + b.z,a.w +b.w);
 }
@@ -31,6 +34,60 @@ __device__ __forceinline__ float rand_float(unsigned int seed) {
     seed *= 0x27d4eb2d;
     seed = seed ^ (seed >> 15);
     return (float)seed / 4294967296.0f; // 归一化到 [0, 1)
+}
+
+// 取小数部分
+__device__ __forceinline__ float fract(float x) { 
+    return x - floorf(x); 
+}
+
+
+__device__ float hash11(float n) {
+    return fract(sinf(n) * 43758.5453123f);
+}
+
+
+__device__ float noise1D(float x) {
+    float i = floorf(x);
+    float f = fract(x);
+    
+
+    float u = f * f * (3.0f - 2.0f * f);
+    
+
+    return hash11(i) * (1.0f - u) + hash11(i + 1.0f) * u;
+}
+
+__device__ float fbm_sharp(float r) {
+    float v = 0.0f;
+    float amp = 1.0f;       // 初始振幅
+    float freq = 1.0f;      // 初始频率
+    float max_amp = 0.0f;   // 用于累加理论最大值，进行严格归一化
+    
+    // 叠加 5 阶细节 (Octaves)
+    for(int i = 0; i < 5; i++) {
+        // 1. 获取平滑噪声，并重新映射到 [-1.0, 1.0]
+        float n = noise1D(r * freq) * 2.0f - 1.0f;
+        
+        // 2. 绝对值制造“锐利折角”，翻转制造“亮光尖峰” (Ridged 操作)
+        n = 1.0f - fabsf(n); 
+        
+        // 3. 可选：平方操作，让亮的环变窄变锐利，暗的缝隙变宽
+        n = n * n; 
+        
+        // 累加到总值
+        v += n * amp;
+        
+        // 记录此时可能达到的最大值
+        max_amp += amp; 
+        
+        // 频率翻倍 (Lacunarity)，振幅减半 (Gain)
+        freq *= 2.0f;  
+        amp *= 0.5f;   
+    }
+    
+    // 4. 完美归一化：除以理论最大值，强行锁死在 [0.0, 1.0]
+    return v / max_amp; 
 }
 
 // ============ 体积渲染吸积盘 - 新增函数 ============
@@ -106,27 +163,28 @@ __device__ float disk_density(float3 pos, float r_disk) {
     // r_disk: 到旋转轴的距离 sqrt(x^2 + y^2)
     
     // 1. 垂直方向：高斯衰减（模拟盘的厚度）
-    float z_scale = 0.15f;  // 厚度参数，越小盘越薄
+    float z_scale = 0.04f;  // 厚度参数，越小盘越薄
     float vertical_density = expf(-fabsf(pos.z) / z_scale);
     
     // 2. 径向方向：幂律衰减（内圈密度高，外圈密度低）
-    float radial_density = powf(r_disk / 3.0f, -1.5f);
+    float radial_density = powf((r_disk-1.4f) / 0.1f, -0.3f);
+
+    float sharp_noise = fbm_sharp(r_disk * 1.5f); 
     
-    // 3. 添加湍流噪声（可选，增加真实感）
-    float noise_scale = 3.0f;
-    float turbulence = noise3D(make_float3(pos.x * noise_scale, pos.y * noise_scale, pos.z * noise_scale));
-    turbulence = 0.7f + 0.6f * turbulence; // [0.7, 1.3]
-    
-    // 4. 螺旋结构（可选）
-    float phi = atan2f(pos.y, pos.x);
-    float spiral_arms = 3.0f; // 螺旋臂数量
-    float spiral_pattern = 1.0f + 0.3f * sinf(spiral_arms * phi - r_disk * 0.5f);
-    
+    // 关键：利用 pow() 调整对比度
+    // pow(x, 1.0): 正常的环
+    // pow(x, 3.0): 极细且极其锐利的亮环，背景是黑缝隙
+    float rings = powf(sharp_noise, 2.0f); 
+    // // 4. 螺旋结构（可选）
+    // float phi = atan2f(pos.y, pos.x);
+    // float spiral_arms = 3.0f; // 螺旋臂数量
+    // float spiral_pattern = 1.0f + 0.3f * sinf(spiral_arms * phi - r_disk * 0.5f);
+    float spiral_pattern=1.0f;
     // 组合所有因素
-    float density = vertical_density * radial_density * turbulence * spiral_pattern;
+    float density = vertical_density * radial_density * rings * spiral_pattern;
     
     // 密度缩放因子（控制整体不透明度）
-    density *= 0.6f;
+    density *= 1.2f;
     
     return fmaxf(0.0f, density);
 }
@@ -136,14 +194,14 @@ __device__ float disk_temperature(float r_disk) {
     // 标准薄盘温度分布：T ∝ r^(-3/4)
     // 内圈高温（蓝白色），外圈低温（橙红色）
     
-    float T0 = 4000.0f; // 参考温度（开尔文）
-    float r0 = 3.0f;    // 参考半径
+    float T0 = 13000.0f; // 参考温度（开尔文）
+    // float r0 = 3.0f;    // 参考半径
     
-    float temp = T0 * powf(r_disk / r0, -0.75f);
+    float temp = T0 *powf(r_disk/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/r_disk),0.25f);
     
-    // 限制温度范围
-    temp = fminf(12000.0f, fmaxf(2000.0f, temp));
-    
+    // // 限制温度范围
+    temp = fminf(2500.0f, fmaxf(1000.0f, temp));
+    // float temp=1500.0f;
     return temp;
 }
 
@@ -156,12 +214,10 @@ __device__ float4 disk_emission(float3 pos, float r_disk) {
     float3 color = temperature_to_color(temp);
     
     // 3. 发射强度（内圈更亮）
-    float intensity = 1.5f / (r_disk - 0.9f);
-    intensity = fminf(3.0f, intensity);
-    
-    // 4. 添加一些变化（模拟热点）
-    float noise_val = noise3D(make_float3(pos.x * 2.0f, pos.y * 2.0f, pos.z * 2.0f));
-    intensity *= (0.8f + 0.4f * noise_val);
+    float intensity = 10.0f*powf(4/(r_disk-1.3f),5.0f);
+    // intensity = fminf(3.0f, intensity);
+    intensity = fminf(20.0f, fmaxf(0.0f, intensity));
+
     
     return make_float4(color.x * intensity, color.y * intensity, color.z * intensity, 1.0f);
 }
@@ -190,9 +246,7 @@ const float focal_length,const float step,const int maxstep,const int jitternum
 
 
 
-//打包成向量
-// float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
-// float r = length(cam_pos);
+
 float3 fwd = make_float3(fwd_x,fwd_y,fwd_z);
 float3 right = make_float3(right_x,right_y,right_z);
 float3 up = make_float3(up_x,up_y,up_z);
@@ -204,10 +258,8 @@ int pixel_idy = blockIdx.y * blockDim.y + threadIdx.y;
 
 if( pixel_idx >= imgwidth || pixel_idy >= imgheight ) return;
 float4 buffer=make_float4(0.0f,0.0f,0.0f,0.0f);
-// float jitterx = rand_float((unsigned int)pixel_idx);
-// float jittery = rand_float((unsigned int)pixel_idy);
-// float physical_x = (((float)pixel_idx+jitterx)/(float)imgwidth - 0.5f) * physwidth;
-// float physical_y = (((float)pixel_idy+jittery)/(float)imgheight - 0.5f) * physheight;
+
+
 float jitterx;
 float jittery;
 float physical_x;
@@ -242,9 +294,7 @@ for (int s = 0 ; s < maxstep && flag ; ++s){
 
     
     //step 1
-u=1.0f/(2.0f * r);
-upl = 1.0f+u;
-umi = 1.0f-u;
+
 float g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
 float uu=1.0f/(upl*upl*upl*upl);
 float3 k11 = p * uu;
@@ -252,14 +302,10 @@ float3 k12 = g * cam_pos;
 
 //自适应步长
 
-        // float n_current = upl * upl * upl / umi;
-        // // 限制真实空间的移动步幅：越靠近视界 (0.5) 步幅越小，防止“瞬移过冲”
-        // float spatial_step = step * fminf(5.0f, fmaxf(0.05f, r - 0.505f)); 
-        // // 将空间步长转换为 RK4 需要的参数步长
-        // float current_step = spatial_step / n_current; 
-
-// float current_step = step * fmaxf(0.02f, (r - 0.55f)); // 离黑洞越近，步长越小
 float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.55f))); 
+if (r > 1.4f && r < 9.5f && fabsf(cam_pos.z) < 0.7f){
+    current_step *=0.05f;
+}
 
 //step 2
 float3 pos_tmp=cam_pos+(current_step/2.0f)*k11;
@@ -298,40 +344,40 @@ float3 k42 = pos_tmp * g;
 cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
 p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
 r = length(cam_pos);
+u=1.0f/(2.0f * r);
+upl = 1.0f+u;
+umi = 1.0f-u;
 
-// ============ 体积渲染吸积盘（新方法）============
-// 计算到旋转轴的距离
 float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
 
-// 检查是否在吸积盘体积内
-// 参数可调：内半径 1.5，外半径 8.0，厚度范围约 ±0.5
-if (r_disk > 1.5f && r_disk < 8.0f && fabsf(cam_pos.z) < 0.5f) {
-    // 1. 计算该点的密度
+
+if (r_disk > 1.5f && r_disk < 9.0f && fabsf(cam_pos.z) < 0.5f) {
+
     float density = disk_density(cam_pos, r_disk);
     
-    // 2. 计算发射颜色（基于温度）
+
     float4 emission = disk_emission(cam_pos, r_disk);
     
-    // 3. 体积渲染累积（Beer-Lambert定律）
-    // step_opacity: 这一小段路径的不透明度
-    float step_opacity = density * current_step * 0.3f; // 0.3是调节因子
-    step_opacity = fminf(step_opacity, 1.0f); // 限制最大值
+    float ravg = (length(prev_pos)+r)/2.0f;
+float uuu=1.0f+1.0f/(2.0f*ravg);
+    float step_opacity = density * 1.7f*uuu*uuu*length(cam_pos-prev_pos);
+    step_opacity = fminf(step_opacity, 1.0f);
     
-    // 4. 前向累积（front-to-back compositing）
-    float transmittance = 1.0f - accumulated_color.w; // 剩余透射率
+
+    float transmittance = 1.0f - accumulated_color.w;
     accumulated_color.x += emission.x * step_opacity * transmittance;
     accumulated_color.y += emission.y * step_opacity * transmittance;
     accumulated_color.z += emission.z * step_opacity * transmittance;
     accumulated_color.w += step_opacity * transmittance;
     
-    // 5. 提前终止（如果已经完全不透明）
+
     if (accumulated_color.w > 0.99f) {
         flag = false;
     }
 }
 
 // 终止条件：掉入黑洞、飞出边界、或数值异常
-if(r<0.55f || r>50.0f || isnan(r)) {flag = false;}
+if(r<0.55f || r>70.0f || isnan(r)) {flag = false;}
 }
 
 float4 color;
@@ -348,19 +394,20 @@ float3 final_dir = normalize(p);
     float tex_v = theta* 0.3183099f+0.5f;
     
 
-    // v = 1.0f - v; 
-    
-    // 5. 使用 CUDA 硬件纹理采样 (tex2D)
-    // tex2D 会自动处理双线性插值和边界环绕
+
     float4 bkgd = tex2D<float4>(tex_obj, tex_u, tex_v);
     color = accumulated_color + bkgd * (1.0f - accumulated_color.w);
-    // // 6. 写入显存 (假设 raw_img 是 float 类型的 RGB 数组)
-    // int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
-    // raw_img[pixel_index + 0] = color.x; // R
-    // raw_img[pixel_index + 1] = color.y; // G
-    // raw_img[pixel_index + 2] = color.z; // B
 
 
+
+// bkgd.x = powf(bkgd.x, 2.2f);
+// bkgd.y = powf(bkgd.y, 2.2f);
+// bkgd.z = powf(bkgd.z, 2.2f);
+
+// float contrast = 1.5f; 
+// bkgd.x = powf(bkgd.x, contrast);
+// bkgd.y = powf(bkgd.y, contrast);
+// bkgd.z = powf(bkgd.z, contrast);
 
 
 } else {
