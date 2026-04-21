@@ -83,6 +83,16 @@ void postprocess_kernel(
     float r = accum[r_idx] * inv_frames;
     float g = accum[g_idx] * inv_frames;
     float b = accum[b_idx] * inv_frames;
+
+
+    float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+    float contrast = 1.03f; // 增强 15% 的微对比度
+    float factor = (contrast * (luma - 0.5f) + 0.5f) / (luma + 1e-5f);
+    
+    // 只有当亮度不是极高时才锐化，防止白色过曝区出现黑点
+    if(luma < 0.9f) {
+        r *= factor; g *= factor; b *= factor;
+    }
     float black_level = 0.03f; 
     r = fmaxf(0.0f, r - black_level);
     g = fmaxf(0.0f, g - black_level);
