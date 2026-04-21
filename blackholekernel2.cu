@@ -214,7 +214,7 @@ __device__ float4 disk_emission(float3 pos, float r_disk) {
     float3 color = temperature_to_color(temp);
     
     // 3. 发射强度（内圈更亮）
-    float intensity = 10.0f*powf(4/(r_disk-1.3f),5.0f);
+    float intensity = 10.0f*powf(4/(r_disk-1.3f),2.0f);
     // intensity = fminf(3.0f, intensity);
     intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 
@@ -240,7 +240,7 @@ const float up_y,
 const float up_z,
 const int imgwidth,const int imgheight,
 const float physwidth,const float physheight,
-const float focal_length,const float step,const int maxstep,const int jitternum
+const float focal_length,const float step,const int maxstep,const int jitternum,const int frames
 
 ){
 
@@ -266,8 +266,8 @@ float physical_x;
 float physical_y;
 for(int i = 0;i < jitternum;++i){
 
-jitterx = rand_float((unsigned int)pixel_idx+i);
-jittery = rand_float((unsigned int)pixel_idy+i+12345);
+jitterx = rand_float((unsigned int)pixel_idx+i+frames);
+jittery = rand_float((unsigned int)pixel_idy+i+12345+frames);
 physical_x = (((float)pixel_idx+jitterx)/(float)imgwidth - 0.5f) * physwidth;
 physical_y = (((float)pixel_idy+jittery)/(float)imgheight - 0.5f) * physheight;
 float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
@@ -303,7 +303,9 @@ float3 k12 = g * cam_pos;
 //自适应步长
 
 float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.55f))); 
-if (r > 1.4f && r < 9.5f && fabsf(cam_pos.z) < 0.7f){
+
+
+if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
     current_step *=0.05f;
 }
 
@@ -351,7 +353,7 @@ umi = 1.0f-u;
 float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
 
 
-if (r_disk > 1.5f && r_disk < 9.0f && fabsf(cam_pos.z) < 0.5f) {
+if (r_disk > 1.5f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
 
     float density = disk_density(cam_pos, r_disk);
     

@@ -37,7 +37,7 @@ def create_texture_object(img_cp):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
+img_file_path = os.path.join(base_path, 'black.bmp')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 
@@ -254,7 +254,7 @@ while not window.should_close():
          cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
          cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
          cp.int32(w), cp.int32(h),
-         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(5000), cp.int32(jitnum)))
+         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(5000), cp.int32(jitnum),cp.int32(frames)))
     
     accum = accum + frame_intermediate_result
     postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
