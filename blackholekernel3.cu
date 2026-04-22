@@ -287,9 +287,20 @@ float3 k12 = g * cam_pos;
 float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.95f))); 
 
 
-if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
-    current_step *=0.05f;
+
+if (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f) {
+
+    float z_factor = fabsf(cam_pos.z) / 2.0f;
+    
+
+    float multiplier = 0.05f + 0.15f * (z_factor * z_factor); 
+    
+    current_step *= multiplier;
 }
+
+// if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
+//     current_step *=0.05f;
+// }
 
 //step 2
 float3 pos_tmp=cam_pos+(current_step/2.0f)*k11;
