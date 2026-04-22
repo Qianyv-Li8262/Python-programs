@@ -57,11 +57,13 @@ img_float = img_rgb.astype(np.float32) / 255.0
 img_cp = cp.array(img_float)
 tex_handle, _internal_storage = create_texture_object(img_cp,3)
 
-lut_phys= cp.load('disk_lut.npy').astype(cp.float32)
+physlut_file_path = os.path.join(base_path, 'disk_lut.npy')#改图片
+lut_phys= cp.load(physlut_file_path).astype(cp.float32)
 
 tex_handle_lut,____=create_texture_object(lut_phys,4)
 
-lut_color= cp.load('color_lut.npy').astype(cp.float32)
+colorlut_file_path = os.path.join(base_path, 'color_lut.npy')
+lut_color= cp.load(colorlut_file_path).astype(cp.float32)
 
 tex_handle_color,____=create_texture_object(lut_color,3)
 
@@ -138,121 +140,6 @@ void postprocess_kernel(
     pbo_out[out_idx + 3] = 255;
 }
 '''
-# postprocess_source=r'''
-# extern "C" __global__
-# void postprocess_kernel(
-#     const float* __restrict__ accum,
-#     unsigned char* __restrict__ pbo_out,
-#     int total_pixels, int frames, int width, int height,
-#     int bloom_radius, float bloom_strength
-# ){
-#     int pid = blockIdx.x * blockDim.x + threadIdx.x;
-#     if (pid >= total_pixels) return;
-    
-#     // 计算 2D 坐标
-#     int x = pid % width;
-#     int y = pid / width;
-    
-#     int r_idx = pid * 3;
-#     int g_idx = pid * 3 + 1;
-#     int b_idx = pid * 3 + 2;
-#     float inv_frames = 1.0f / (float)frames;
-#     float r = accum[r_idx] * inv_frames;
-#     float g = accum[g_idx] * inv_frames;
-#     float b = accum[b_idx] * inv_frames;
-
-#     // ========== 原有的 Luma 对比度增强（保持不变）==========
-#     float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-#     float contrast = 1.03f;
-#     float factor = (contrast * (luma - 0.5f) + 0.5f) / (luma + 1e-5f);
-    
-#     if(luma < 0.9f) {
-#         r *= factor; g *= factor; b *= factor;
-#     }
-#     float black_level = 0.03f; 
-#     r = fmaxf(0.0f, r - black_level);
-#     g = fmaxf(0.0f, g - black_level);
-#     b = fmaxf(0.0f, b - black_level);
-
-#     float exposure = 1.3f;
-#     r *= exposure; g *= exposure; b *= exposure;
-
-#     // ========== ACES Tone Mapping（保持不变）==========
-#     float a = 2.51f, b_c = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
-#     r = (r * (a * r + b_c)) / (r * (c * r + d) + e);
-#     g = (g * (a * g + b_c)) / (g * (c * g + d) + e);
-#     b = (b * (a * b + b_c)) / (b * (c * b + d) + e);
-    
-#     r = __powf(r, 0.4545f) * 255.0f;
-#     g = __powf(g, 0.4545f) * 255.0f;
-#     b = __powf(b, 0.4545f) * 255.0f;
-#     r = fmaxf(0.0f, fminf(r, 255.0f));
-#     g = fmaxf(0.0f, fminf(g, 255.0f));
-#     b = fmaxf(0.0f, fminf(b, 255.0f));
-    
-#     // ========== 新增：Bloom 高斯模糊 ==========
-#     if (bloom_radius > 0 && bloom_strength > 0.0f) {
-#         float sigma = (float)bloom_radius / 3.0f;
-#         float bloom_r = 0.0f, bloom_g = 0.0f, bloom_b = 0.0f;
-#         float weight_sum = 0.0f;
-        
-#         // 在邻域内采样（简化版，只采样部分点以提高性能）
-#         int step = max(1, bloom_radius / 3); // 采样步长
-#         for (int dy = -bloom_radius; dy <= bloom_radius; dy += step) {
-#             for (int dx = -bloom_radius; dx <= bloom_radius; dx += step) {
-#                 int nx = x + dx;
-#                 int ny = y + dy;
-                
-#                 // 边界检查
-#                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                
-#                 // 计算高斯权重
-#                 float dist_sq = (float)(dx * dx + dy * dy);
-#                 float weight = expf(-dist_sq / (2.0f * sigma * sigma));
-                
-#                 // 采样邻域像素（从 accum 读取，应用相同的后处理）
-#                 int neighbor_idx = (ny * width + nx) * 3;
-#                 float nr = accum[neighbor_idx + 0] * inv_frames;
-#                 float ng = accum[neighbor_idx + 1] * inv_frames;
-#                 float nb = accum[neighbor_idx + 2] * inv_frames;
-                
-#                 // 应用相同的后处理流程（简化版，只做 tone mapping）
-#                 nr *= exposure; ng *= exposure; nb *= exposure;
-#                 nr = (nr * (a * nr + b_c)) / (nr * (c * nr + d) + e);
-#                 ng = (ng * (a * ng + b_c)) / (ng * (c * ng + d) + e);
-#                 nb = (nb * (a * nb + b_c)) / (nb * (c * nb + d) + e);
-#                 nr = __powf(nr, 0.4545f) * 255.0f;
-#                 ng = __powf(ng, 0.4545f) * 255.0f;
-#                 nb = __powf(nb, 0.4545f) * 255.0f;
-                
-#                 bloom_r += nr * weight;
-#                 bloom_g += ng * weight;
-#                 bloom_b += nb * weight;
-#                 weight_sum += weight;
-#             }
-#         }
-        
-#         // 归一化并叠加 Bloom
-#         if (weight_sum > 0.0f) {
-#             bloom_r /= weight_sum;
-#             bloom_g /= weight_sum;
-#             bloom_b /= weight_sum;
-            
-#             // 叠加到原图（加法混合）
-#             r = fminf(255.0f, r + bloom_r * bloom_strength);
-#             g = fminf(255.0f, g + bloom_g * bloom_strength);
-#             b = fminf(255.0f, b + bloom_b * bloom_strength);
-#         }
-#     }
-    
-#     // ========== 输出到 PBO ==========
-#     int out_idx = pid * 4;
-#     pbo_out[out_idx + 0] = (unsigned char)r;
-#     pbo_out[out_idx + 1] = (unsigned char)g;
-#     pbo_out[out_idx + 2] = (unsigned char)b;
-#     pbo_out[out_idx + 3] = 255;
-# }
-# '''
 
 postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
 
