@@ -206,7 +206,7 @@ focal_length=1.0
 window=ZeroCopyWindow(w,h,'try')
 frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
 accum=cp.zeros((h * w * 3), dtype=cp.float32)
-block_x,block_y=32,32
+block_x,block_y=16,16
 grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
 grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
 print(grid_x)
