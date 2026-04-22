@@ -349,9 +349,9 @@ r = length(cam_pos);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-
-float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
-
+float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0f,0.0f);
+// float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
+float r_disk = sqrtf(temp.x * temp.x + temp.y * temp.y);
 
 if (r_disk > 1.5f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
 

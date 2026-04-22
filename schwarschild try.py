@@ -5,6 +5,7 @@ import time
 from cupy.cuda import texture
 from cupy.cuda import runtime
 import glfw
+from cupyx.scipy.ndimage import gaussian_filter
 import os
 from zero_copy_window import ZeroCopyWindow
 def create_texture_object(img_cp):
@@ -37,7 +38,7 @@ def create_texture_object(img_cp):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'black.bmp')#改图片
+img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 
@@ -116,6 +117,12 @@ void postprocess_kernel(
     r = fmaxf(0.0f, fminf(r, 255.0f));
     g = fmaxf(0.0f, fminf(g, 255.0f));
     b = fmaxf(0.0f, fminf(b, 255.0f));
+
+
+
+
+
+    
     // Output RGBA for OpenGL (BGR->RGB swap: accum is RGB already)
     int out_idx = pid * 4;
     pbo_out[out_idx + 0] = (unsigned char)r;
@@ -124,12 +131,161 @@ void postprocess_kernel(
     pbo_out[out_idx + 3] = 255;
 }
 '''
+# postprocess_source=r'''
+# extern "C" __global__
+# void postprocess_kernel(
+#     const float* __restrict__ accum,
+#     unsigned char* __restrict__ pbo_out,
+#     int total_pixels, int frames, int width, int height,
+#     int bloom_radius, float bloom_strength
+# ){
+#     int pid = blockIdx.x * blockDim.x + threadIdx.x;
+#     if (pid >= total_pixels) return;
+    
+#     // 计算 2D 坐标
+#     int x = pid % width;
+#     int y = pid / width;
+    
+#     int r_idx = pid * 3;
+#     int g_idx = pid * 3 + 1;
+#     int b_idx = pid * 3 + 2;
+#     float inv_frames = 1.0f / (float)frames;
+#     float r = accum[r_idx] * inv_frames;
+#     float g = accum[g_idx] * inv_frames;
+#     float b = accum[b_idx] * inv_frames;
+
+#     // ========== 原有的 Luma 对比度增强（保持不变）==========
+#     float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+#     float contrast = 1.03f;
+#     float factor = (contrast * (luma - 0.5f) + 0.5f) / (luma + 1e-5f);
+    
+#     if(luma < 0.9f) {
+#         r *= factor; g *= factor; b *= factor;
+#     }
+#     float black_level = 0.03f; 
+#     r = fmaxf(0.0f, r - black_level);
+#     g = fmaxf(0.0f, g - black_level);
+#     b = fmaxf(0.0f, b - black_level);
+
+#     float exposure = 1.3f;
+#     r *= exposure; g *= exposure; b *= exposure;
+
+#     // ========== ACES Tone Mapping（保持不变）==========
+#     float a = 2.51f, b_c = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+#     r = (r * (a * r + b_c)) / (r * (c * r + d) + e);
+#     g = (g * (a * g + b_c)) / (g * (c * g + d) + e);
+#     b = (b * (a * b + b_c)) / (b * (c * b + d) + e);
+    
+#     r = __powf(r, 0.4545f) * 255.0f;
+#     g = __powf(g, 0.4545f) * 255.0f;
+#     b = __powf(b, 0.4545f) * 255.0f;
+#     r = fmaxf(0.0f, fminf(r, 255.0f));
+#     g = fmaxf(0.0f, fminf(g, 255.0f));
+#     b = fmaxf(0.0f, fminf(b, 255.0f));
+    
+#     // ========== 新增：Bloom 高斯模糊 ==========
+#     if (bloom_radius > 0 && bloom_strength > 0.0f) {
+#         float sigma = (float)bloom_radius / 3.0f;
+#         float bloom_r = 0.0f, bloom_g = 0.0f, bloom_b = 0.0f;
+#         float weight_sum = 0.0f;
+        
+#         // 在邻域内采样（简化版，只采样部分点以提高性能）
+#         int step = max(1, bloom_radius / 3); // 采样步长
+#         for (int dy = -bloom_radius; dy <= bloom_radius; dy += step) {
+#             for (int dx = -bloom_radius; dx <= bloom_radius; dx += step) {
+#                 int nx = x + dx;
+#                 int ny = y + dy;
+                
+#                 // 边界检查
+#                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                
+#                 // 计算高斯权重
+#                 float dist_sq = (float)(dx * dx + dy * dy);
+#                 float weight = expf(-dist_sq / (2.0f * sigma * sigma));
+                
+#                 // 采样邻域像素（从 accum 读取，应用相同的后处理）
+#                 int neighbor_idx = (ny * width + nx) * 3;
+#                 float nr = accum[neighbor_idx + 0] * inv_frames;
+#                 float ng = accum[neighbor_idx + 1] * inv_frames;
+#                 float nb = accum[neighbor_idx + 2] * inv_frames;
+                
+#                 // 应用相同的后处理流程（简化版，只做 tone mapping）
+#                 nr *= exposure; ng *= exposure; nb *= exposure;
+#                 nr = (nr * (a * nr + b_c)) / (nr * (c * nr + d) + e);
+#                 ng = (ng * (a * ng + b_c)) / (ng * (c * ng + d) + e);
+#                 nb = (nb * (a * nb + b_c)) / (nb * (c * nb + d) + e);
+#                 nr = __powf(nr, 0.4545f) * 255.0f;
+#                 ng = __powf(ng, 0.4545f) * 255.0f;
+#                 nb = __powf(nb, 0.4545f) * 255.0f;
+                
+#                 bloom_r += nr * weight;
+#                 bloom_g += ng * weight;
+#                 bloom_b += nb * weight;
+#                 weight_sum += weight;
+#             }
+#         }
+        
+#         // 归一化并叠加 Bloom
+#         if (weight_sum > 0.0f) {
+#             bloom_r /= weight_sum;
+#             bloom_g /= weight_sum;
+#             bloom_b /= weight_sum;
+            
+#             // 叠加到原图（加法混合）
+#             r = fminf(255.0f, r + bloom_r * bloom_strength);
+#             g = fminf(255.0f, g + bloom_g * bloom_strength);
+#             b = fminf(255.0f, b + bloom_b * bloom_strength);
+#         }
+#     }
+    
+#     // ========== 输出到 PBO ==========
+#     int out_idx = pid * 4;
+#     pbo_out[out_idx + 0] = (unsigned char)r;
+#     pbo_out[out_idx + 1] = (unsigned char)g;
+#     pbo_out[out_idx + 2] = (unsigned char)b;
+#     pbo_out[out_idx + 3] = 255;
+# }
+# '''
 
 postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
 
 print('kernel complied')
 
-
+def apply_bloom(image_gpu, threshold=1.0, blur_radius=15, bloom_strength=0.8):
+    """
+    对 GPU 图像应用 Bloom 效果
+    
+    Args:
+        image_gpu: CuPy 数组，形状 (H, W, 4)，RGBA 格式，值域 [0, 255]
+        threshold: 亮度阈值（0-255），超过此值的像素参与 Bloom
+        blur_radius: 高斯模糊半径（像素）
+        bloom_strength: Bloom 强度（0-1）
+    """
+    # 1. 转换为 float 并归一化到 [0, 1]
+    img_float = image_gpu.astype(cp.float32) / 255.0
+    
+    # 2. 提取亮部（luminance > threshold）
+    luminance = 0.2126 * img_float[:, :, 0] + 0.7152 * img_float[:, :, 1] + 0.0722 * img_float[:, :, 2]
+    bright_mask = (luminance > threshold / 255.0).astype(cp.float32)
+    
+    # 3. 提取亮部颜色
+    bright_colors = cp.zeros_like(img_float[:, :, :3])
+    for i in range(3):
+        bright_colors[:, :, i] = img_float[:, :, i] * bright_mask
+    
+    # 4. 对亮部进行高斯模糊
+    blurred = cp.zeros_like(bright_colors)
+    for i in range(3):
+        blurred[:, :, i] = gaussian_filter(bright_colors[:, :, i], sigma=blur_radius)
+    
+    # 5. 叠加 Bloom 到原图
+    result = img_float[:, :, :3] + blurred * bloom_strength
+    result = cp.clip(result, 0.0, 1.0)
+    
+    # 6. 转回 uint8
+    image_gpu[:, :, :3] = (result * 255.0).astype(cp.uint8)
+    
+    return image_gpu
 
 # 超参数！
 
@@ -259,6 +415,13 @@ while not window.should_close():
     accum = accum + frame_intermediate_result
     postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
     frames += 1
+#     current_frame_uint8 = current_frame_float.view(cp.uint8).reshape((h, w, 4))
+#     current_frame_float = apply_bloom(
+#     current_frame_uint8, 
+#     threshold=200,        # 亮度阈值（0-255）
+#     blur_radius=20,       # 模糊半径（像素）
+#     bloom_strength=0.6    # Bloom 强度
+# )
     window.unmap_and_draw()
 
 
