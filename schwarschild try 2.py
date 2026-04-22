@@ -55,6 +55,7 @@ img_bgr = cv2.imread(img_file_path)
 img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 img_float = img_rgb.astype(np.float32) / 255.0
 img_cp = cp.array(img_float)
+# img_cp = gaussian_filter(img_cp, sigma=0.8, axes=(0, 1)) 
 tex_handle, _internal_storage = create_texture_object(img_cp,3)
 
 physlut_file_path = os.path.join(base_path, 'disk_lut.npy')#改图片

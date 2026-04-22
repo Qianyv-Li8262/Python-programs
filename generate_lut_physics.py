@@ -142,7 +142,7 @@ __device__ float disk_temperature(float r_disk) {
     float temp = T0 *powf(r_disk/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/r_disk),0.25f);
     
 
-    temp = fminf(2500.0f, fmaxf(1000.0f, temp));
+    //temp = fminf(2500.0f, fmaxf(1000.0f, temp));
     // float temp=1500.0f;
     return temp;
 }
@@ -184,7 +184,8 @@ float r_phys = rmin + (rmax - rmin) * (float)r_pix / (float)r_pixels;
 float z_phys = (float)z_pix/(float)z_pixels*zmax;
 float density = disk_density(z_phys,r_phys);
 float temp = disk_temperature(r_phys);
-float intensity =  10.0f*powf(4/(r_phys-1.3f),2.0f);
+//float intensity =  10.0f*powf(4/(r_phys-1.3f),2.0f);
+float intensity = 0.3f * (temp/1000)* (temp/1000)* (temp/1000)* (temp/1000);
 intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 int u = tid *4;
 out_array[u+0]=density;
@@ -203,4 +204,4 @@ kernel((293,),(256,),(array,cp.int32(1500),cp.int32(50),cp.float32(0.5),cp.float
 np_arr = array.get()
 np.save('disk_lut.npy', np_arr)
 print("LUT 生成完成，形状:", np_arr.shape)
-print(np_arr[5:10,3:10,:])
+print(np_arr[5:10,1410:1420,:])

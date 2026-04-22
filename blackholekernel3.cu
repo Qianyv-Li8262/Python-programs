@@ -355,8 +355,14 @@ if (r_disk > 1.52f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
     float4 emission = disk_emission(parameters.y,parameters.z,lut_color);
     
     float ravg = (length(prev_pos)+r)/2.0f;
-float uuu=1.0f+1.0f/(2.0f*ravg);
-    float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos);
+    float uuu=1.0f+1.0f/(2.0f*ravg);
+    // float intensity_factor = fminf(1.0f, parameters.z * 5.0f); 
+    // float S = 0.3f; 
+    // float x = fmaxf(0.0f, fminf(1.0f, parameters.z / S));
+    // float intensity_factor = x * x * (3.0f - 2.0f * x);
+    float k = 2.0f; 
+    float intensity_factor = 1.0f - __expf(-(k * parameters.z)*(k * parameters.z));
+    float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos)* intensity_factor;
     step_opacity = fminf(step_opacity, 1.0f);
     
 
