@@ -188,17 +188,15 @@ __device__ float disk_temperature(float r_disk) {
 }
 
 // 计算吸积盘在某点的发射颜色和强度
-__device__ float4 disk_emission(float3 pos, float r_disk) {
-    // 1. 计算温度
-    float temp = disk_temperature(r_disk);
-    
-    // 2. 温度转颜色
-    float3 color = temperature_to_color(temp);
+__device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color) {
+
+
+    float4 color = tex2D<float4>(lut_color,(temp-1000.0f)/20000.0f,0.5f);
     
     // 3. 发射强度（内圈更亮）
-    float intensity = 10.0f*powf(4/(r_disk-1.3f),2.0f);
+    // float intensity = 10.0f*powf(4/(r_disk-1.3f),2.0f);
     // intensity = fminf(3.0f, intensity);
-    intensity = fminf(20.0f, fmaxf(0.0f, intensity));
+    // intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 
     
     return make_float4(color.x * intensity, color.y * intensity, color.z * intensity, 1.0f);
@@ -208,6 +206,8 @@ extern "C" __global__
 void blackholekernel(
 float* __restrict__ raw_img,
 cudaTextureObject_t tex_obj,
+cudaTextureObject_t lut_physics,
+cudaTextureObject_t lut_color,
 const float cam_pos_x,
 const float cam_pos_y,
 const float cam_pos_z,
@@ -284,7 +284,7 @@ float3 k12 = g * cam_pos;
 
 //自适应步长
 
-float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.55f))); 
+float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.95f))); 
 
 
 if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
@@ -335,16 +335,17 @@ float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0
 // float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
 float r_disk = sqrtf(temp.x * temp.x + temp.y * temp.y);
 
-if (r_disk > 1.5f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
+if (r_disk > 1.52f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
 
-    float density = disk_density(cam_pos, r_disk);
+    float4 parameters = tex2D<float4>(lut_physics,(r_disk-1.5f)/15.0f,fabsf(cam_pos.z)/0.5f);
+    
     
 
-    float4 emission = disk_emission(cam_pos, r_disk);
+    float4 emission = disk_emission(parameters.y,parameters.z,lut_color);
     
     float ravg = (length(prev_pos)+r)/2.0f;
 float uuu=1.0f+1.0f/(2.0f*ravg);
-    float step_opacity = density * 1.7f*uuu*uuu*length(cam_pos-prev_pos);
+    float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos);
     step_opacity = fminf(step_opacity, 1.0f);
     
 
@@ -361,11 +362,11 @@ float uuu=1.0f+1.0f/(2.0f*ravg);
 }
 
 // 终止条件：掉入黑洞、飞出边界、或数值异常
-if(r<0.55f || r>70.0f || isnan(r)) {flag = false;}
+if(r<1.0f || r>70.0f || isnan(r)) {flag = false;}
 }
 
 float4 color;
-if (r >=0.55f && !isnan(r)) {
+if (r >=1.0f && !isnan(r)) {
 
 
 
