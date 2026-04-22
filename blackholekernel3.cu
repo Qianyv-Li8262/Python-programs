@@ -277,26 +277,33 @@ for (int s = 0 ; s < maxstep && flag ; ++s){
     
     //step 1
 
-float g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
-float uu=1.0f/(upl*upl*upl*upl);
+float rmhalf = r-0.5f;
+float g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+float uplsq=upl*upl;
+float uu=1.0f/(uplsq*uplsq);
 float3 k11 = p * uu;
 float3 k12 = g * cam_pos;
 
 //自适应步长
 
-float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.95f))); 
+// float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.95f))); 
 
 
 
-if (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f) {
+// if (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f) {
 
-    float z_factor = fabsf(cam_pos.z) / 2.0f;
+//     float z_factor = fabsf(cam_pos.z) / 2.0f;
     
 
-    float multiplier = 0.05f + 0.15f * (z_factor * z_factor); 
+//     float multiplier = 0.05f + 0.15f * (z_factor * z_factor); 
     
-    current_step *= multiplier;
-}
+//     current_step *= multiplier;
+// }
+
+bool in_disk_volume = (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f); 
+// in_disk_volume 为 true 时(1.0)，应用 0.05f，否则为 1.0f
+float zone_multiplier = in_disk_volume ? (0.05f + 0.15f * (cam_pos.z * cam_pos.z * 0.25f)) : 1.0f;
+float current_step = step * fminf(10.0f, fmaxf(0.05f, r - 0.95f)) * zone_multiplier;
 
 // if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
 //     current_step *=0.05f;
@@ -308,8 +315,10 @@ r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
-uu=1.0f/(upl*upl*upl*upl);
+rmhalf = r-0.5f;
+g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+uplsq=upl*upl;
+uu=1.0f/(uplsq*uplsq);
 float3 k21 = (p+(current_step/2.0f)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
@@ -319,8 +328,10 @@ r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
-uu=1.0f/(upl*upl*upl*upl);
+rmhalf = r-0.5f;
+g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+uplsq=upl*upl;
+uu=1.0f/(uplsq*uplsq);
 float3 k31 = (p+(current_step/2.0f)*k22)*uu;
 float3 k32 = pos_tmp * g;
 
@@ -330,8 +341,10 @@ r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
-g = -1.0f/(r*r*r*umi*umi*umi)*upl*(2.0f-u);
-uu=1.0f/(upl*upl*upl*upl);
+rmhalf = r-0.5f;
+g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+uplsq=upl*upl;
+uu=1.0f/(uplsq*uplsq);
 float3 k41 = (p + current_step*k32)*uu;
 float3 k42 = pos_tmp * g;
 
@@ -344,10 +357,12 @@ upl = 1.0f+u;
 umi = 1.0f-u;
 float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0f,0.0f);
 // float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
-float r_disk = sqrtf(temp.x * temp.x + temp.y * temp.y);
+float r_disk_sq = temp.x * temp.x + temp.y * temp.y;
+bool indisk = (r_disk_sq > 2.3104f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 0.5f);
 
-if (r_disk > 1.52f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
-
+// if (__any_sync(0xFFFFFFFF, indisk)) {
+if (indisk) {
+float r_disk=sqrtf(r_disk_sq);
     float4 parameters = tex2D<float4>(lut_physics,(r_disk-1.5f)/15.0f,fabsf(cam_pos.z)/0.5f);
     
     
@@ -378,12 +393,15 @@ if (r_disk > 1.52f && r_disk < 16.5f && fabsf(cam_pos.z) < 0.5f) {
     }
 }
 
+// }
+
+
 // 终止条件：掉入黑洞、飞出边界、或数值异常
-if(r<1.0f || r>70.0f || isnan(r)) {flag = false;}
+if(r<1.02f || r>70.0f ) {flag = false;}
 }
 
 float4 color;
-if (r >=1.0f && !isnan(r)) {
+if (r >=1.02f && !isnan(r)) {
 
 
 

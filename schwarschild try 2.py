@@ -185,7 +185,7 @@ def apply_bloom(image_gpu, threshold=1.0, blur_radius=15, bloom_strength=0.8):
 # 超参数！
 
 
-w,h=2048,2048
+w,h=1024,1024
 r=20.0
 th=0
 cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
@@ -206,7 +206,7 @@ focal_length=1.0
 window=ZeroCopyWindow(w,h,'try')
 frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
 accum=cp.zeros((h * w * 3), dtype=cp.float32)
-block_x,block_y=16,16
+block_x,block_y=8,8
 grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
 grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
 print(grid_x)
@@ -305,7 +305,7 @@ while not window.should_close():
          cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
          cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
          cp.int32(w), cp.int32(h),
-         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(5000), cp.int32(jitnum),cp.int32(frames)))
+         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
     
     accum = accum + frame_intermediate_result
     postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
