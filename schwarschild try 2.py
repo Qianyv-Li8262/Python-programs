@@ -185,7 +185,7 @@ def apply_bloom(image_gpu, threshold=1.0, blur_radius=15, bloom_strength=0.8):
 # 超参数！
 
 
-w,h=1024,1024
+w,h=2048,2048
 r=20.0
 th=0
 cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
