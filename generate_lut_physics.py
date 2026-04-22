@@ -185,6 +185,7 @@ float z_phys = (float)z_pix/(float)z_pixels*zmax;
 float density = disk_density(z_phys,r_phys);
 float temp = disk_temperature(r_phys);
 float intensity =  10.0f*powf(4/(r_phys-1.3f),2.0f);
+intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 int u = tid *4;
 out_array[u+0]=density;
 out_array[u+1]=temp;
