@@ -111,7 +111,7 @@ void blur_y_fuse_postprocess_kernel(
     g = fmaxf(0.0f, g - black_level);
     b = fmaxf(0.0f, b - black_level);
 
-    float exposure = 0.9f;
+    float exposure = 0.35f;
     r *= exposure; g *= exposure; b *= exposure;
 
     float a_c = 2.51f, b_c = 0.03f, c_c = 2.43f, d_c = 0.59f, e_c = 0.14f;

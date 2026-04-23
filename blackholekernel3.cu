@@ -417,7 +417,7 @@ float r_disk=sqrtf(r_disk_sq);
 
 
 // 终止条件：掉入黑洞、飞出边界、或数值异常
-if(r<0.55f || r>70.0f ) {flag = false;}
+if(r<0.55f || r>140.0f ) {flag = false;}
 }
 
 float4 color;
