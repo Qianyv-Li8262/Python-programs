@@ -33,7 +33,7 @@ return (2.0f*r+1.0f)/sqrtf(1.0f+4.0f*r*r-8.0f*r);
 }
 
 __device__ __forceinline__ float phidot(float r){
-float a = powf(r,1.5f);
+float a = r*sqrtf(r);
 float b = sqrtf(1.0f+4.0f*r*r-8.0f*r);
 return 8.0f*a/b/(2.0f*r+1.0f)/(2.0f*r+1.0f);
 }
@@ -47,156 +47,7 @@ __device__ __forceinline__ float rand_float(unsigned int seed) {
     return (float)seed / 4294967296.0f; // 归一化到 [0, 1)
 }
 
-// 取小数部分
-__device__ __forceinline__ float fract(float x) { 
-    return x - floorf(x); 
-}
 
-
-__device__ float hash11(float n) {
-    return fract(sinf(n) * 43758.5453123f);
-}
-
-
-__device__ float noise1D(float x) {
-    float i = floorf(x);
-    float f = fract(x);
-    
-
-    float u = f * f * (3.0f - 2.0f * f);
-    
-
-    return hash11(i) * (1.0f - u) + hash11(i + 1.0f) * u;
-}
-
-__device__ float fbm_sharp(float r) {
-    float v = 0.0f;
-    float amp = 1.0f;       // 初始振幅
-    float freq = 1.0f;      // 初始频率
-    float max_amp = 0.0f;   // 用于累加理论最大值，进行严格归一化
-    
-    // 叠加 5 阶细节 (Octaves)
-    for(int i = 0; i < 5; i++) {
-        // 1. 获取平滑噪声，并重新映射到 [-1.0, 1.0]
-        float n = noise1D(r * freq) * 2.0f - 1.0f;
-        
-        // 2. 绝对值制造“锐利折角”，翻转制造“亮光尖峰” (Ridged 操作)
-        n = 1.0f - fabsf(n); 
-        
-        // 3. 可选：平方操作，让亮的环变窄变锐利，暗的缝隙变宽
-        n = n * n; 
-        
-        // 累加到总值
-        v += n * amp;
-        
-        // 记录此时可能达到的最大值
-        max_amp += amp; 
-        
-        // 频率翻倍 (Lacunarity)，振幅减半 (Gain)
-        freq *= 2.0f;  
-        amp *= 0.5f;   
-    }
-    
-    // 4. 完美归一化：除以理论最大值，强行锁死在 [0.0, 1.0]
-    return v / max_amp; 
-}
-
-
-
-// 黑体辐射颜色近似（温度 -> RGB）
-__device__ float3 temperature_to_color(float temp) {
-    // temp: 温度（开尔文），范围 1000K - 40000K
-    // 修正版 Tanner Helland 算法
-    
-    // 注意：原算法的拟合公式是基于 temp / 100.0f 计算的！
-    float t = temp / 100.0f; 
-    float r, g, b;
-    
-    // --- Red ---
-    if (t <= 66.0f) {
-        r = 1.0f;
-    } else {
-        r = 1.292936186f * powf(t - 60.0f, -0.1332047592f);
-        r = fminf(1.0f, fmaxf(0.0f, r));
-    }
-    
-    // --- Green ---
-    if (t <= 66.0f) {
-        g = 0.39008157876f * logf(t) - 0.631841444f;
-        g = fminf(1.0f, fmaxf(0.0f, g));
-    } else {
-        g = 1.129890861f * powf(t - 60.0f, -0.0755148492f);
-        g = fminf(1.0f, fmaxf(0.0f, g));
-    }
-    
-    // --- Blue ---
-    if (t >= 66.0f) {
-        b = 1.0f;
-    } else if (t <= 19.0f) { // 原算法中低于 1900K 蓝光为 0
-        b = 0.0f;
-    } else {
-        b = 0.543206789f * logf(t - 10.0f) - 1.196254089f;
-        b = fminf(1.0f, fmaxf(0.0f, b));
-    }
-            r = fminf(1.0f, fmaxf(0.0f, r));
-    g = fminf(1.0f, fmaxf(0.0f, g));
-    b = fminf(1.0f, fmaxf(0.0f, b));
-    return make_float3(r, g, b);
-}
-
-
-
-
-
-
-// 吸积盘密度函数
-__device__ float disk_density(float3 pos, float r_disk) {
-    // 参数说明：
-    // pos: 当前位置
-    // r_disk: 到旋转轴的距离 sqrt(x^2 + y^2)
-    
-    // 1. 垂直方向：高斯衰减（模拟盘的厚度）
-    float z_scale = 0.04f;  // 厚度参数，越小盘越薄
-    float vertical_density = expf(-fabsf(pos.z) / z_scale);
-    
-    // 2. 径向方向：幂律衰减（内圈密度高，外圈密度低）
-    float radial_density = powf((r_disk-1.4f) / 0.1f, -0.3f);
-
-    float sharp_noise = fbm_sharp(r_disk * 1.5f); 
-    
-    // 关键：利用 pow() 调整对比度
-    // pow(x, 1.0): 正常的环
-    // pow(x, 3.0): 极细且极其锐利的亮环，背景是黑缝隙
-    float rings = powf(sharp_noise, 2.0f); 
-    // // 4. 螺旋结构（可选）
-    // float phi = atan2f(pos.y, pos.x);
-    // float spiral_arms = 3.0f; // 螺旋臂数量
-    // float spiral_pattern = 1.0f + 0.3f * sinf(spiral_arms * phi - r_disk * 0.5f);
-    float spiral_pattern=1.0f;
-    // 组合所有因素
-    float density = vertical_density * radial_density * rings * spiral_pattern;
-    
-    // 密度缩放因子（控制整体不透明度）
-    density *= 1.2f;
-    
-    return fmaxf(0.0f, density);
-}
-
-// 吸积盘温度函数
-__device__ float disk_temperature(float r_disk) {
-    // 标准薄盘温度分布：T ∝ r^(-3/4)
-    // 内圈高温（蓝白色），外圈低温（橙红色）
-    
-    float T0 = 13000.0f; // 参考温度（开尔文）
-    // float r0 = 3.0f;    // 参考半径
-    
-    float temp = T0 *powf(r_disk/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/r_disk),0.25f);
-    
-    // // 限制温度范围
-    temp = fminf(2500.0f, fmaxf(1000.0f, temp));
-    // float temp=1500.0f;
-    return temp;
-}
 
 // 计算吸积盘在某点的发射颜色和强度
 __device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color) {
@@ -287,7 +138,6 @@ float4 accumulated_color = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 for (int s = 0 ; s < maxstep && flag ; ++s){
     float3 prev_pos = cam_pos;
 
-    
     //step 1
 
 float rmhalf = r-0.5f;
@@ -323,7 +173,8 @@ float current_step = step * fminf(10.0f, fmaxf(0.05f, r - 0.54f)) * zone_multipl
 // }
 
 //step 2
-float3 pos_tmp=cam_pos+(current_step/2.0f)*k11;
+float stephalf = current_step*0.5f;
+float3 pos_tmp=cam_pos+(stephalf)*k11;
 r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
@@ -332,11 +183,11 @@ rmhalf = r-0.5f;
 g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
 uplsq=upl*upl;
 uu=1.0f/(uplsq*uplsq);
-float3 k21 = (p+(current_step/2.0f)*k12)*uu;
+float3 k21 = (p+(stephalf)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
 //step 3
-pos_tmp=cam_pos+(current_step/2.0f)*k21;
+pos_tmp=cam_pos+(stephalf)*k21;
 r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
@@ -345,7 +196,7 @@ rmhalf = r-0.5f;
 g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
 uplsq=upl*upl;
 uu=1.0f/(uplsq*uplsq);
-float3 k31 = (p+(current_step/2.0f)*k22)*uu;
+float3 k31 = (p+(stephalf)*k22)*uu;
 float3 k32 = pos_tmp * g;
 
 //step 4

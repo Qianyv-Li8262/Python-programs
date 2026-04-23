@@ -96,7 +96,7 @@ print('kernel complied')
 # 超参数！
 
 
-w,h=2000,2000
+w,h=2048,2048
 
 cam_pos = np.array([80.0,0.0, 0.0], dtype=np.float32)
 cam_yaw = np.pi
@@ -108,7 +108,7 @@ turn_speed = 0.01
 focus_speed=0.01
 jitnum=1
 
-focal_length=1.0
+focal_length=3.2
 
 
 
