@@ -96,7 +96,7 @@ print('kernel complied')
 # 超参数！
 
 
-w,h=2048,2048
+w,h=3200,2000
 r=20.0
 th=0
 cam_pos = np.array([r*np.cos(th),r*np.sin(th), 0.0], dtype=np.float32)
@@ -120,9 +120,9 @@ accum=cp.zeros((h * w * 3), dtype=cp.float32)
 bright_buf = cp.empty((h * w * 3), dtype=cp.float32)
 blur_x_tmp = cp.empty((h * w * 3), dtype=cp.float32)
 bloom_threshold = np.float32(1.7)  # 超过多亮的区域产生光晕
-bloom_radius = np.int32(20)        # 模糊采样半径 (越大光晕越宽)
+bloom_radius = np.int32(15)        # 模糊采样半径 (越大光晕越宽)
 bloom_sigma = np.float32(8.0)      # 高斯分布的平滑度
-bloom_strength = np.float32(1.5)   # 光晕强度
+bloom_strength = np.float32(0.8)   # 光晕强度
 block_x,block_y=8,8
 grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
 grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
@@ -222,7 +222,7 @@ while not window.should_close():
          cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
          cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
          cp.int32(w), cp.int32(h),
-         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
+         cp.float32(3.2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
     
     accum = accum + frame_intermediate_result
     
