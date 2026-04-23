@@ -116,9 +116,9 @@ __device__ float disk_density(float posz, float r_disk) {
     float vertical_density = expf(-fabsf(posz) / z_scale);
     
  
-    float radial_density = powf((r_disk-1.4f) / 0.1f, -0.3f);
+    float radial_density = powf((r_disk-6.349489f) / 0.1f, -0.3f);
 
-    float sharp_noise = fbm_sharp(r_disk * 1.5f); 
+    float sharp_noise = fbm_sharp((r_disk-6.349489f) * 1.5f); 
     float rings = powf(sharp_noise, 2.0f); 
 
 
@@ -139,7 +139,7 @@ __device__ float disk_temperature(float r_disk) {
     float T0 = 13000.0f;
     // float r0 = 3.0f;
     
-    float temp = T0 *powf(r_disk/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/r_disk),0.25f);
+    float temp = T0 *powf((r_disk-4.9495f)/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/(r_disk-4.9495f)),0.25f);
     
 
     //temp = fminf(2500.0f, fmaxf(1000.0f, temp));
@@ -156,7 +156,7 @@ __device__ float4 disk_emission(float3 pos, float r_disk) {
     float3 color = temperature_to_color(temp);
     
     // 3. 发射强度（内圈更亮）
-    float intensity = 10.0f*powf(4/(r_disk-1.3f),2.0f);
+    float intensity = 10.0f*powf(4/(r_disk-6.2494f),2.0f);
     // intensity = fminf(3.0f, intensity);
     intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 
@@ -184,7 +184,7 @@ float r_phys = rmin + (rmax - rmin) * (float)r_pix / (float)r_pixels;
 float z_phys = (float)z_pix/(float)z_pixels*zmax;
 float density = disk_density(z_phys,r_phys);
 float temp = disk_temperature(r_phys);
-float intensity =  10.0f*powf(4/(r_phys-1.3f),2.0f);
+float intensity =  10.0f*powf(4/(r_phys-4.0f),2.0f);
 //float intensity = 0.3f * (temp/1000)* (temp/1000)* (temp/1000)* (temp/1000);
 intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 int u = tid *4;
@@ -200,7 +200,7 @@ out_array[u+3]=0.0f;
 
 array=cp.empty((50,1500,4),dtype=cp.float32)
 kernel = cp.RawKernel(generation_source, 'generateLutPhysics')
-kernel((293,),(256,),(array,cp.int32(1500),cp.int32(50),cp.float32(0.5),cp.float32(1.5),cp.float32(16.5)))
+kernel((293,),(256,),(array,cp.int32(1500),cp.int32(50),cp.float32(0.5),cp.float32(4.9495),cp.float32(16.5)))
 np_arr = array.get()
 np.save('disk_lut.npy', np_arr)
 print("LUT 生成完成，形状:", np_arr.shape)

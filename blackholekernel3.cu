@@ -300,7 +300,7 @@ float3 k12 = g * cam_pos;
 //     current_step *= multiplier;
 // }
 
-bool in_disk_volume = (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f); 
+bool in_disk_volume = (r > 4.8f && r < 18.0f && fabsf(cam_pos.z) < 2.0f); 
 // in_disk_volume 为 true 时(1.0)，应用 0.05f，否则为 1.0f
 float zone_multiplier = in_disk_volume ? (0.05f + 0.15f * (cam_pos.z * cam_pos.z * 0.25f)) : 1.0f;
 float current_step = step * fminf(10.0f, fmaxf(0.05f, r - 0.54f)) * zone_multiplier;
@@ -358,12 +358,12 @@ umi = 1.0f-u;
 float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0f,0.0f);
 // float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
 float r_disk_sq = temp.x * temp.x + temp.y * temp.y;
-bool indisk = (r_disk_sq > 2.3104f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 0.5f);
+bool indisk = (r_disk_sq > 24.4974f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 0.5f);
 
 // if (__any_sync(0xFFFFFFFF, indisk)) {
 if (indisk) {
 float r_disk=sqrtf(r_disk_sq);
-    float4 parameters = tex2D<float4>(lut_physics,(r_disk-1.5f)/15.0f,fabsf(cam_pos.z)/0.5f);
+    float4 parameters = tex2D<float4>(lut_physics,(r_disk-4.9495f)/11.5505f,fabsf(cam_pos.z)/0.5f);
     
     
 
