@@ -149,25 +149,13 @@ float3 k12 = g * cam_pos;
 
 //自适应步长
 
-// float current_step = step * fminf(10.0f, fmaxf(0.05f, (r - 0.95f))); 
 
-
-
-// if (r > 1.2f && r < 18.0f && fabsf(cam_pos.z) < 2.0f) {
-
-//     float z_factor = fabsf(cam_pos.z) / 2.0f;
-    
-
-//     float multiplier = 0.05f + 0.15f * (z_factor * z_factor); 
-    
-//     current_step *= multiplier;
-// }
 
 bool in_disk_volume = (r > 4.8f && r < 18.0f && fabsf(cam_pos.z) < 2.0f); 
 // in_disk_volume 为 true 时(1.0)，应用 0.05f，否则为 1.0f
 float zone_multiplier = in_disk_volume ? (0.05f + 0.15f * (cam_pos.z * cam_pos.z * 0.25f)) : 1.0f;
-float current_step = step * fminf(50.0f, fmaxf(0.05f, r - 0.54f)) * zone_multiplier;
-// current_step = r<1.89?0.1*current_step:current_step;
+float current_step = step * fminf(70.0f, fmaxf(0.05f, r - 0.54f)) * zone_multiplier;
+
 // if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
 //     current_step *=0.05f;
 // }
@@ -187,35 +175,35 @@ float3 k21 = (p+(stephalf)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
 //step 3
-pos_tmp=cam_pos+(stephalf)*k21;
-r = length(pos_tmp);
-u=1.0f/(2.0f * r);
-upl = 1.0f+u;
-umi = 1.0f-u;
-rmhalf = r-0.5f;
-g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-uplsq=upl*upl;
-uu=1.0f/(uplsq*uplsq);
-float3 k31 = (p+(stephalf)*k22)*uu;
-float3 k32 = pos_tmp * g;
+// pos_tmp=cam_pos+(stephalf)*k21;
+// r = length(pos_tmp);
+// u=1.0f/(2.0f * r);
+// upl = 1.0f+u;
+// umi = 1.0f-u;
+// rmhalf = r-0.5f;
+// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+// uplsq=upl*upl;
+// uu=1.0f/(uplsq*uplsq);
+// float3 k31 = (p+(stephalf)*k22)*uu;
+// float3 k32 = pos_tmp * g;
 
-//step 4
-pos_tmp=cam_pos+ current_step*k31;
-r = length(pos_tmp);
-u=1.0f/(2.0f * r);
-upl = 1.0f+u;
-umi = 1.0f-u;
+// //step 4
+// pos_tmp=cam_pos+ current_step*k31;
+// r = length(pos_tmp);
+// u=1.0f/(2.0f * r);
+// upl = 1.0f+u;
+// umi = 1.0f-u;
 
-rmhalf = r-0.5f;
-g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-uplsq=upl*upl;
-uu=1.0f/(uplsq*uplsq);
-float3 k41 = (p + current_step*k32)*uu;
-float3 k42 = pos_tmp * g;
+// rmhalf = r-0.5f;
+// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+// uplsq=upl*upl;
+// uu=1.0f/(uplsq*uplsq);
+// float3 k41 = (p + current_step*k32)*uu;
+// float3 k42 = pos_tmp * g;
 
 //concatenate
-cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
-p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
+cam_pos = cam_pos+(current_step)*(k21);
+p = p+(current_step)*(k22);
 r = length(cam_pos);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
