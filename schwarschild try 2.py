@@ -155,11 +155,11 @@ while not window.should_close():
     
     if glfw.KEY_W in window.key_pressed:
         cam_pos += fwd * move_speed
-        focal_length=a*np.sqrt(cam_pos[0]**2-1)
+        # focal_length=a*np.sqrt(cam_pos[0]**2-1)
         camera_moved = True
     if glfw.KEY_S in window.key_pressed:
         cam_pos -= fwd * move_speed
-        focal_length=a*np.sqrt(cam_pos[0]**2-1)
+        # focal_length=a*np.sqrt(cam_pos[0]**2-1)
         camera_moved = True
     if glfw.KEY_D in window.key_pressed:
         cam_pos -= right * move_speed

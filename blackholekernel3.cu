@@ -166,7 +166,7 @@ float3 k12 = g * cam_pos;
 bool in_disk_volume = (r > 4.8f && r < 18.0f && fabsf(cam_pos.z) < 2.0f); 
 // in_disk_volume 为 true 时(1.0)，应用 0.05f，否则为 1.0f
 float zone_multiplier = in_disk_volume ? (0.05f + 0.15f * (cam_pos.z * cam_pos.z * 0.25f)) : 1.0f;
-float current_step = step * fminf(10.0f, fmaxf(0.05f, r - 0.54f)) * zone_multiplier;
+float current_step = step * fminf(50.0f, fmaxf(0.05f, r - 0.54f)) * zone_multiplier;
 
 // if (r > 1.4f && r < 17.0f && fabsf(cam_pos.z) < 0.7f){
 //     current_step *=0.05f;
