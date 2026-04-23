@@ -98,17 +98,17 @@ print('kernel complied')
 
 w,h=2000,2000
 
-cam_pos = np.array([125.0,0.0, 1.5], dtype=np.float32)
+cam_pos = np.array([80.0,0.0, 0.0], dtype=np.float32)
 cam_yaw = np.pi
 cam_pitch = 0.0
 cam_roll = 0.0 
 
-move_speed = 0.025
+move_speed = 1
 turn_speed = 0.01
 focus_speed=0.01
 jitnum=1
 
-focal_length=3.5
+focal_length=1.0
 
 
 
@@ -145,6 +145,7 @@ up0 /= np.linalg.norm(up0)
 right = right0 * np.cos(cam_roll) + up0 * np.sin(cam_roll)
 up = up0 * np.cos(cam_roll) - right0 * np.sin(cam_roll)
 
+a=0.04
 
 while not window.should_close():
     current_frame_float = window.map_pbo()
@@ -154,9 +155,11 @@ while not window.should_close():
     
     if glfw.KEY_W in window.key_pressed:
         cam_pos += fwd * move_speed
+        focal_length=a*np.sqrt(cam_pos[0]**2-1)
         camera_moved = True
     if glfw.KEY_S in window.key_pressed:
         cam_pos -= fwd * move_speed
+        focal_length=a*np.sqrt(cam_pos[0]**2-1)
         camera_moved = True
     if glfw.KEY_D in window.key_pressed:
         cam_pos -= right * move_speed
