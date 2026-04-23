@@ -103,7 +103,7 @@ cam_yaw = np.pi
 cam_pitch = 0.0
 cam_roll = 0.0 
 
-move_speed = 1
+move_speed = 0.05
 turn_speed = 0.01
 focus_speed=0.01
 jitnum=1
