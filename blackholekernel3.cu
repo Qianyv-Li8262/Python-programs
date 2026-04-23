@@ -27,6 +27,17 @@ __device__ __forceinline__ float length(float3 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
+
+__device__ __forceinline__ float tdot(float r){
+return (2.0f*r+1.0f)/sqrtf(1.0f+4.0f*r*r-8.0f*r);
+}
+
+__device__ __forceinline__ float phidot(float r){
+float a = powf(r,1.5f);
+float b = sqrtf(1.0f+4.0f*r*r-8.0f*r);
+return 8.0f*a/b/(2.0f*r+1.0f)/(2.0f*r+1.0f);
+}
+
 __device__ __forceinline__ float rand_float(unsigned int seed) {
     seed = (seed ^ 61) ^ (seed >> 16);
     seed *= 9;
@@ -188,7 +199,7 @@ __device__ float disk_temperature(float r_disk) {
 }
 
 // 计算吸积盘在某点的发射颜色和强度
-__device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color,float g) {
+__device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color) {
 
 
     float4 color = tex2D<float4>(lut_color,(temp-1000.0f)/20000.0f,0.5f);
@@ -264,8 +275,10 @@ d=normalize(d);
 float u=1.0f/(2.0f * r);
 float upl = 1.0f+u;
 float umi = 1.0f-u;
+float factor = upl/umi;
 float n=upl*upl*upl/umi;
 float3 p = d * n;
+float lz = cam_pos.x*p.y-cam_pos.y*p.x;
 bool flag = true;
 float4 accumulated_color = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 // bool hit_disk=false;
@@ -341,6 +354,7 @@ r = length(pos_tmp);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
 umi = 1.0f-u;
+
 rmhalf = r-0.5f;
 g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
 uplsq=upl*upl;
@@ -360,21 +374,23 @@ float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0
 float r_disk_sq = temp.x * temp.x + temp.y * temp.y;
 bool indisk = (r_disk_sq > 24.4974f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 0.5f);
 
-// if (__any_sync(0xFFFFFFFF, indisk)) {
+
 if (indisk) {
 float r_disk=sqrtf(r_disk_sq);
     float4 parameters = tex2D<float4>(lut_physics,(r_disk-4.9495f)/11.5505f,fabsf(cam_pos.z)/0.5f);
     
-    
+    // calculate g factor
+    float td = tdot(r);
+    float pd = phidot(r);
+    float g = factor /(td+pd*lz);
+    // g = 1.0f;
 
-    float4 emission = disk_emission(parameters.y,parameters.z,lut_color,1.0f);
+    float4 emission = disk_emission(parameters.y*g,parameters.z*g*g*g*g,lut_color);
+    // float4 emission = disk_emission(19000,parameters.z*g*g*g*g,lut_color);
     
     float ravg = (length(prev_pos)+r)/2.0f;
     float uuu=1.0f+1.0f/(2.0f*ravg);
-    // float intensity_factor = fminf(1.0f, parameters.z * 5.0f); 
-    // float S = 0.3f; 
-    // float x = fmaxf(0.0f, fminf(1.0f, parameters.z / S));
-    // float intensity_factor = x * x * (3.0f - 2.0f * x);
+
     float k = 2.0f; 
     float intensity_factor = 1.0f - __expf(-(k * parameters.z)*(k * parameters.z));
     float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos)* intensity_factor;
@@ -386,14 +402,18 @@ float r_disk=sqrtf(r_disk_sq);
     accumulated_color.y += emission.y * step_opacity * transmittance;
     accumulated_color.z += emission.z * step_opacity * transmittance;
     accumulated_color.w += step_opacity * transmittance;
-    
+    // 调试：直接显示 g 因子
+// accumulated_color.x = (g>1)?0:1;
+// accumulated_color.y = 0.0f;
+// accumulated_color.z = 0.0f;
+
 
     if (accumulated_color.w > 0.99f) {
         flag = false;
     }
 }
 
-// }
+
 
 
 // 终止条件：掉入黑洞、飞出边界、或数值异常

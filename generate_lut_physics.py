@@ -136,9 +136,12 @@ __device__ float disk_temperature(float r_disk) {
 
 
     
+    //float T0 = 130000.0f;
+    //float xi = r_disk + 1.0f + 0.25f/r_disk; // 转换为标准坐标比例
+    //float q_factor = (1.0f - sqrt(6.0f/xi)) / (1.0f - 3.0f/xi);
+    //float temp = T0 * pow(xi, -0.75f) * pow(q_factor, 0.25f);
+
     float T0 = 13000.0f;
-    // float r0 = 3.0f;
-    
     float temp = T0 *powf((r_disk-4.9495f)/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/(r_disk-4.9495f)),0.25f);
     
 
@@ -184,8 +187,8 @@ float r_phys = rmin + (rmax - rmin) * (float)r_pix / (float)r_pixels;
 float z_phys = (float)z_pix/(float)z_pixels*zmax;
 float density = disk_density(z_phys,r_phys);
 float temp = disk_temperature(r_phys);
-float intensity =  10.0f*powf(4/(r_phys-4.0f),2.0f);
-//float intensity = 0.3f * (temp/1000)* (temp/1000)* (temp/1000)* (temp/1000);
+//float intensity =  10.0f*powf(4/(r_phys-4.0f),2.0f);
+float intensity = 0.3f * (temp/1000)* (temp/1000)* (temp/1000)* (temp/1000);
 intensity = fminf(20.0f, fmaxf(0.0f, intensity));
 int u = tid *4;
 out_array[u+0]=density;

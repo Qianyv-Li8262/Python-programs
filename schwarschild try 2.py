@@ -78,109 +78,20 @@ module = cp.RawModule(code=cuda_source, options=('-use_fast_math',))
 
 trace_rays_kernel = module.get_function("blackholekernel")
 
-postprocess_source=r'''
-extern "C" __global__
-void postprocess_kernel(
-    const float* __restrict__ accum,
-    unsigned char* __restrict__ pbo_out,
-    int total_pixels, int frames
-){
-    int pid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (pid >= total_pixels) return;
-    int r_idx = pid * 3;
-    int g_idx = pid * 3 + 1;
-    int b_idx = pid * 3 + 2;
-    float inv_frames = 1.0f / (float)frames;
-    float r = accum[r_idx] * inv_frames;
-    float g = accum[g_idx] * inv_frames;
-    float b = accum[b_idx] * inv_frames;
-
-
-    float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-    float contrast = 1.03f; // 增强 15% 的微对比度
-    float factor = (contrast * (luma - 0.5f) + 0.5f) / (luma + 1e-5f);
-    
-    // 只有当亮度不是极高时才锐化，防止白色过曝区出现黑点
-    if(luma < 0.9f) {
-        r *= factor; g *= factor; b *= factor;
-    }
-    float black_level = 0.03f; 
-    r = fmaxf(0.0f, r - black_level);
-    g = fmaxf(0.0f, g - black_level);
-    b = fmaxf(0.0f, b - black_level);
-
-
-    float exposure = 1.3f;
-    r *= exposure; g *= exposure; b *= exposure;
-    //float exposure = 1.2f;
-    //r *= exposure; g *= exposure; b *= exposure;
-
-    // 3. ACES Filmic Tone Mapping (保留亮度时的色彩饱和度)
-    float a = 2.51f, b_c = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
-    r = (r * (a * r + b_c)) / (r * (c * r + d) + e);
-    g = (g * (a * g + b_c)) / (g * (c * g + d) + e);
-    b = (b * (a * b + b_c)) / (b * (c * b + d) + e);
-    
-    r = __powf(r, 0.4545f) * 255.0f;
-    g = __powf(g, 0.4545f) * 255.0f;
-    b = __powf(b, 0.4545f) * 255.0f;
-    r = fmaxf(0.0f, fminf(r, 255.0f));
-    g = fmaxf(0.0f, fminf(g, 255.0f));
-    b = fmaxf(0.0f, fminf(b, 255.0f));
 
 
 
-
-
-    
-    // Output RGBA for OpenGL (BGR->RGB swap: accum is RGB already)
-    int out_idx = pid * 4;
-    pbo_out[out_idx + 0] = (unsigned char)r;
-    pbo_out[out_idx + 1] = (unsigned char)g;
-    pbo_out[out_idx + 2] = (unsigned char)b;
-    pbo_out[out_idx + 3] = 255;
-}
-'''
-
-postprocess_kernel = cp.RawKernel(postprocess_source, 'postprocess_kernel', options=('-use_fast_math',))
+kernel_path = os.path.join(base_path, "postprocess_gemini.cu")
+with open(kernel_path, "r", encoding="utf-8") as f:
+    cuda_source = f.read()
+bloom_module = cp.RawModule(code=cuda_source, options=('-use_fast_math',))
+extract_bright_kernel = bloom_module.get_function("extract_bright_kernel")
+blur_x_kernel = bloom_module.get_function("blur_x_kernel")
+blur_y_fuse_kernel = bloom_module.get_function("blur_y_fuse_postprocess_kernel")
 
 print('kernel complied')
 
-def apply_bloom(image_gpu, threshold=1.0, blur_radius=15, bloom_strength=0.8):
-    """
-    对 GPU 图像应用 Bloom 效果
-    
-    Args:
-        image_gpu: CuPy 数组，形状 (H, W, 4)，RGBA 格式，值域 [0, 255]
-        threshold: 亮度阈值（0-255），超过此值的像素参与 Bloom
-        blur_radius: 高斯模糊半径（像素）
-        bloom_strength: Bloom 强度（0-1）
-    """
-    # 1. 转换为 float 并归一化到 [0, 1]
-    img_float = image_gpu.astype(cp.float32) / 255.0
-    
-    # 2. 提取亮部（luminance > threshold）
-    luminance = 0.2126 * img_float[:, :, 0] + 0.7152 * img_float[:, :, 1] + 0.0722 * img_float[:, :, 2]
-    bright_mask = (luminance > threshold / 255.0).astype(cp.float32)
-    
-    # 3. 提取亮部颜色
-    bright_colors = cp.zeros_like(img_float[:, :, :3])
-    for i in range(3):
-        bright_colors[:, :, i] = img_float[:, :, i] * bright_mask
-    
-    # 4. 对亮部进行高斯模糊
-    blurred = cp.zeros_like(bright_colors)
-    for i in range(3):
-        blurred[:, :, i] = gaussian_filter(bright_colors[:, :, i], sigma=blur_radius)
-    
-    # 5. 叠加 Bloom 到原图
-    result = img_float[:, :, :3] + blurred * bloom_strength
-    result = cp.clip(result, 0.0, 1.0)
-    
-    # 6. 转回 uint8
-    image_gpu[:, :, :3] = (result * 255.0).astype(cp.uint8)
-    
-    return image_gpu
+
 
 # 超参数！
 
@@ -206,6 +117,12 @@ focal_length=1.0
 window=ZeroCopyWindow(w,h,'try')
 frame_intermediate_result=cp.empty((h * w * 3), dtype=cp.float32)
 accum=cp.zeros((h * w * 3), dtype=cp.float32)
+bright_buf = cp.empty((h * w * 3), dtype=cp.float32)
+blur_x_tmp = cp.empty((h * w * 3), dtype=cp.float32)
+bloom_threshold = np.float32(1.7)  # 超过多亮的区域产生光晕
+bloom_radius = np.int32(20)        # 模糊采样半径 (越大光晕越宽)
+bloom_sigma = np.float32(8.0)      # 高斯分布的平滑度
+bloom_strength = np.float32(1.5)   # 光晕强度
 block_x,block_y=8,8
 grid_x=w//block_x+1 if w%block_x!=0 else w//block_x
 grid_y=h//block_y+1 if h%block_y!=0 else h//block_y
@@ -308,15 +225,20 @@ while not window.should_close():
          cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
     
     accum = accum + frame_intermediate_result
-    postprocess_kernel((cp.int32(tot_pixels//1024+1 if tot_pixels%1024!=0 else tot_pixels//1024),),(cp.int32(1024),),(accum, current_frame_float, tot_pixels, frames))
+    
+    extract_bright_kernel((grid_x, grid_y), (block_x, block_y), 
+                          (accum, bright_buf, np.int32(w), np.int32(h), 
+                           np.float32(frames), bloom_threshold))
+    blur_x_kernel((grid_x, grid_y), (block_x, block_y),
+                  (bright_buf, blur_x_tmp, np.int32(w), np.int32(h), 
+                   bloom_radius, bloom_sigma))
+    blur_y_fuse_kernel((grid_x, grid_y), (block_x, block_y),
+                       (accum, blur_x_tmp, current_frame_float, 
+                        np.int32(w), np.int32(h), 
+                        bloom_radius, bloom_sigma, 
+                        np.float32(frames), bloom_strength))
+    
     frames += 1
-#     current_frame_uint8 = current_frame_float.view(cp.uint8).reshape((h, w, 4))
-#     current_frame_float = apply_bloom(
-#     current_frame_uint8, 
-#     threshold=200,        # 亮度阈值（0-255）
-#     blur_radius=20,       # 模糊半径（像素）
-#     bloom_strength=0.6    # Bloom 强度
-# )
     window.unmap_and_draw()
 
 
