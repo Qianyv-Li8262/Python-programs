@@ -188,7 +188,7 @@ __device__ float disk_temperature(float r_disk) {
 }
 
 // 计算吸积盘在某点的发射颜色和强度
-__device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color) {
+__device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color,float g) {
 
 
     float4 color = tex2D<float4>(lut_color,(temp-1000.0f)/20000.0f,0.5f);
@@ -367,7 +367,7 @@ float r_disk=sqrtf(r_disk_sq);
     
     
 
-    float4 emission = disk_emission(parameters.y,parameters.z,lut_color);
+    float4 emission = disk_emission(parameters.y,parameters.z,lut_color,1.0f);
     
     float ravg = (length(prev_pos)+r)/2.0f;
     float uuu=1.0f+1.0f/(2.0f*ravg);
