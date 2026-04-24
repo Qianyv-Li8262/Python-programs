@@ -105,7 +105,7 @@ cam_roll = 0.0
 
 move_speed = 0.05
 turn_speed = 0.01
-focus_speed=0.1
+focus_speed=0.02
 jitnum=1
 
 focal_length=3.2
