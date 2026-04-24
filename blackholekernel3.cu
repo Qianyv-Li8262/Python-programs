@@ -47,6 +47,101 @@ __device__ __forceinline__ float rand_float(unsigned int seed) {
     return (float)seed / 4294967296.0f; // 归一化到 [0, 1)
 }
 
+// --------- 辅助哈希函数 ---------
+__device__ __forceinline__ float fractf(float x) {
+    return x - floorf(x);
+}
+
+// 3D 空间哈希，基于 Dave Hoskins 的算法
+__device__ float hash31(float x, float y, float z) {
+    float3 p3 = make_float3(x, y, z);
+    p3.x = fractf(p3.x * 0.1031f);
+    p3.y = fractf(p3.y * 0.1030f);
+    p3.z = fractf(p3.z * 0.0973f);
+    float dot_val = p3.x * (p3.y + 33.33f) + p3.y * (p3.z + 33.33f) + p3.z * (p3.x + 33.33f);
+    return fractf((p3.x + p3.y + p3.z) * dot_val);
+}
+
+
+__device__ float3 procedural_stars(float3 dir, int frames) {
+    float3 total_stars = make_float3(0.0f, 0.0f, 0.0f);
+    
+
+    float lod_blend = __expf(-(float)(frames - 1) * 0.5f); 
+    
+    // ==========================================
+    // 图层 1：密集的背景微弱星
+    // ==========================================
+    float sharp1_target = 25.0f; // 静止时极度尖锐
+    float sharp1_moving = 2.0f;  // 移动时极度模糊（扩散为大光斑防闪烁）
+    // 根据运动状态插值当前的锐度
+    float s1 = sharp1_moving * lod_blend + sharp1_target * (1.0f - lod_blend);
+    // 【能量守恒定律】：面积变大了，亮度必须按等比例降低，否则满屏白光
+    float energy_scale1 = s1 / sharp1_target; 
+    
+    float scale1 = 2000.0f; 
+    float3 p1 = dir * scale1;
+    float3 i1 = make_float3(floorf(p1.x), floorf(p1.y), floorf(p1.z));
+    float h1 = hash31(i1.x, i1.y, i1.z);
+    float thresh1 = 0.9f; 
+    
+    if (h1 > thresh1) { 
+        float offx = hash31(i1.x + 12.f, i1.y + 34.f, i1.z + 56.f);
+        float offy = hash31(i1.x + 78.f, i1.y + 90.f, i1.z + 12.f);
+        float offz = hash31(i1.x + 34.f, i1.y + 56.f, i1.z + 78.f);
+        float dx = (p1.x - i1.x) - offx, dy = (p1.y - i1.y) - offy, dz = (p1.z - i1.z) - offz;
+        float dist2 = dx*dx + dy*dy + dz*dz;
+        
+        // 应用动态模糊
+        float star_shape = __expf(-dist2 * s1); 
+        // 亮度乘以能量守恒系数
+        float brightness = ((h1 - thresh1) / (1.0f - thresh1)) * 1.5f * energy_scale1; 
+        total_stars = total_stars + make_float3(1.0f, 1.0f, 1.0f) * brightness * star_shape;
+    }
+    
+    // ==========================================
+    // 图层 2：稀疏的超亮主角恒星
+    // ==========================================
+    float sharp2_target = 18.0f;
+    float sharp2_moving = 1.5f; 
+    float s2 = sharp2_moving * lod_blend + sharp2_target * (1.0f - lod_blend);
+    float energy_scale2 = s2 / sharp2_target;
+    
+    float scale2 = 1200.0f;
+    float3 p2 = dir * scale2;
+    float3 i2 = make_float3(floorf(p2.x), floorf(p2.y), floorf(p2.z));
+    float h2 = hash31(i2.x + 111.f, i2.y + 222.f, i2.z + 333.f);
+    float thresh2 = 0.95f; 
+    
+    if (h2 > thresh2) { 
+        float offx = hash31(i2.x + 13.f, i2.y + 35.f, i2.z + 57.f);
+        float offy = hash31(i2.x + 79.f, i2.y + 91.f, i2.z + 13.f);
+        float offz = hash31(i2.x + 35.f, i2.y + 57.f, i2.z + 79.f);
+        float dx = (p2.x - i2.x) - offx, dy = (p2.y - i2.y) - offy, dz = (p2.z - i2.z) - offz;
+        float dist2 = dx*dx + dy*dy + dz*dz;
+        
+        float star_shape = __expf(-dist2 * s2); 
+        float brightness = ((h2 - thresh2) / (1.0f - thresh2)) * 8.0f * energy_scale2; 
+        
+        float r = hash31(i2.x + 1.f, i2.y, i2.z);
+        float g = hash31(i2.x, i2.y + 1.f, i2.z);
+        float b = hash31(i2.x, i2.y, i2.z + 1.f);
+        float3 star_color = normalize(make_float3(r + 0.5f, g + 0.5f, b + 0.8f));
+        
+        total_stars = total_stars + star_color * brightness * star_shape;
+    }
+    
+    return total_stars;
+}
+
+
+
+
+
+
+
+
+
 
 
 // 计算吸积盘在某点的发射颜色和强度
@@ -186,36 +281,36 @@ uu=1.0f/(uplsq*uplsq);
 float3 k21 = (p+(stephalf)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
-//step 3
-pos_tmp=cam_pos+(stephalf)*k21;
-r = length(pos_tmp);
-u=1.0f/(2.0f * r);
-upl = 1.0f+u;
-umi = 1.0f-u;
-rmhalf = r-0.5f;
-g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-uplsq=upl*upl;
-uu=1.0f/(uplsq*uplsq);
-float3 k31 = (p+(stephalf)*k22)*uu;
-float3 k32 = pos_tmp * g;
+// //step 3
+// pos_tmp=cam_pos+(stephalf)*k21;
+// r = length(pos_tmp);
+// u=1.0f/(2.0f * r);
+// upl = 1.0f+u;
+// umi = 1.0f-u;
+// rmhalf = r-0.5f;
+// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+// uplsq=upl*upl;
+// uu=1.0f/(uplsq*uplsq);
+// float3 k31 = (p+(stephalf)*k22)*uu;
+// float3 k32 = pos_tmp * g;
 
-//step 4
-pos_tmp=cam_pos+ current_step*k31;
-r = length(pos_tmp);
-u=1.0f/(2.0f * r);
-upl = 1.0f+u;
-umi = 1.0f-u;
+// //step 4
+// pos_tmp=cam_pos+ current_step*k31;
+// r = length(pos_tmp);
+// u=1.0f/(2.0f * r);
+// upl = 1.0f+u;
+// umi = 1.0f-u;
 
-rmhalf = r-0.5f;
-g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-uplsq=upl*upl;
-uu=1.0f/(uplsq*uplsq);
-float3 k41 = (p + current_step*k32)*uu;
-float3 k42 = pos_tmp * g;
+// rmhalf = r-0.5f;
+// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
+// uplsq=upl*upl;
+// uu=1.0f/(uplsq*uplsq);
+// float3 k41 = (p + current_step*k32)*uu;
+// float3 k42 = pos_tmp * g;
 
 //concatenate
-cam_pos = cam_pos+(current_step/6.0f)*(k11+2.0f*k21+2.0f*k31+k41);
-p = p+(current_step/6.0f)*(k12+2.0f*k22+2.0f*k32+k42);
+cam_pos = cam_pos+(current_step)*(k21);
+p = p+(current_step)*(k22);
 r = length(cam_pos);
 u=1.0f/(2.0f * r);
 upl = 1.0f+u;
@@ -287,18 +382,28 @@ float3 final_dir = normalize(p);
 
 
     float4 bkgd = tex2D<float4>(tex_obj, tex_u, tex_v);
-    color = accumulated_color + bkgd * (1.0f - accumulated_color.w);
+
+    
+    
+// 注释掉以下这段以禁用程序化星空生成
+    
+// bkgd.x *= 0.6f;
+// bkgd.y *= 0.6f;
+// bkgd.z *= 0.6f;
+
+// float3 p_stars = procedural_stars(final_dir,frames);
+// bkgd.x += p_stars.x;
+// bkgd.y += p_stars.y;
+// bkgd.z += p_stars.z;
+
+// 注释掉以上这段以禁用程序化星空生成
 
 
 
-// bkgd.x = powf(bkgd.x, 2.2f);
-// bkgd.y = powf(bkgd.y, 2.2f);
-// bkgd.z = powf(bkgd.z, 2.2f);
 
-// float contrast = 1.5f; 
-// bkgd.x = powf(bkgd.x, contrast);
-// bkgd.y = powf(bkgd.y, contrast);
-// bkgd.z = powf(bkgd.z, contrast);
+
+color = accumulated_color + bkgd * (1.0f - accumulated_color.w);
+
 
 
 } else {

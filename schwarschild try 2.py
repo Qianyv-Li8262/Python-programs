@@ -38,7 +38,7 @@ def create_texture_object(img_cp,num_of_channels):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
+img_file_path = os.path.join(base_path, 'eso0932a_16bit.tif')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 
@@ -58,7 +58,7 @@ img_cp = cp.array(img_float)
 # img_cp = gaussian_filter(img_cp, sigma=0.8, axes=(0, 1)) 
 tex_handle, _internal_storage = create_texture_object(img_cp,3)
 
-physlut_file_path = os.path.join(base_path, 'disk_lut.npy')#改图片
+physlut_file_path = os.path.join(base_path, 'disk_lut.npy')
 lut_phys= cp.load(physlut_file_path).astype(cp.float32)
 
 tex_handle_lut,____=create_texture_object(lut_phys,4)
@@ -105,7 +105,7 @@ cam_roll = 0.0
 
 move_speed = 0.05
 turn_speed = 0.01
-focus_speed=0.5
+focus_speed=0.1
 jitnum=1
 
 focal_length=3.2
