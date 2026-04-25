@@ -96,7 +96,7 @@ print('kernel complied')
 # 超参数！
 
 
-w,h=2048,2048
+w,h=3200,2000
 
 cam_pos = np.array([80.0,0.0, 0.0], dtype=np.float32)
 cam_yaw = np.pi
@@ -224,7 +224,7 @@ while not window.should_close():
          cp.float32(right[0]), cp.float32(right[1]), cp.float32(right[2]),
          cp.float32(up[0]), cp.float32(up[1]), cp.float32(up[2]),
          cp.int32(w), cp.int32(h),
-         cp.float32(2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
+         cp.float32(3.2), cp.float32(2), cp.float32(focal_length), cp.float32(0.1), cp.int32(2000), cp.int32(jitnum),cp.int32(frames)))
     
     accum = accum + frame_intermediate_result
     
