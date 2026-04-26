@@ -27,7 +27,7 @@ float uy_loc = 0.0f;
 float f[9];
 float f_eqn[9];
 
-//use ghost cells which means you should cover the region with mask = 1 but only on the y direction
+//use ghost cells which means you should cover the region with mask = 1 on the y direction
 
 #pragma unroll
 for (int i=0;i<9;++i){
