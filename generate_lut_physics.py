@@ -145,7 +145,7 @@ __device__ float disk_temperature(float r_disk) {
     float temp = T0 *powf((r_disk-4.9495f)/2.0f,-2.0f)*powf(1.0f-sqrtf(1.5f/(r_disk-4.9495f)),0.25f);
     
 
-    //temp = fminf(2500.0f, fmaxf(1000.0f, temp));
+    temp = fmaxf(1000.0f, temp);
     // float temp=1500.0f;
     return temp;
 }

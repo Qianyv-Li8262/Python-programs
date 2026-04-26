@@ -26,7 +26,7 @@ def create_texture_object(img_cp,num_of_channels):
         pitchInBytes=pitch_bytes
     )
     tex_ptr = texture.TextureDescriptor(
-        addressModes=(runtime.cudaAddressModeClamp, runtime.cudaAddressModeClamp),
+        addressModes=(runtime.cudaAddressModeWrap, runtime.cudaAddressModeClamp),
         filterMode=runtime.cudaFilterModeLinear,
         readMode=runtime.cudaReadModeElementType,
         normalizedCoords=1
@@ -38,7 +38,7 @@ def create_texture_object(img_cp,num_of_channels):
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
-img_file_path = os.path.join(base_path, 'eso0932a_16bit.tif')#改图片
+img_file_path = os.path.join(base_path, 'eso0932a.tif')#改图片
 img_bgr = cv2.imread(img_file_path)
 
 

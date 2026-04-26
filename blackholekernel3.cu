@@ -83,7 +83,7 @@ __device__ float3 procedural_stars(float3 dir, int frames) {
     float3 p1 = dir * scale1;
     float3 i1 = make_float3(floorf(p1.x), floorf(p1.y), floorf(p1.z));
     float h1 = hash31(i1.x, i1.y, i1.z);
-    float thresh1 = 0.9f; 
+    float thresh1 = 0.8f; 
     
     if (h1 > thresh1) { 
         float offx = hash31(i1.x + 12.f, i1.y + 34.f, i1.z + 56.f);
@@ -331,7 +331,7 @@ float r_disk=sqrtf(r_disk_sq);
     float g = factor /(td+pd*lz);
     // g = 1.0f;
 
-    float4 emission = disk_emission(parameters.y*g,parameters.z*g*g*g*g,lut_color);
+    float4 emission = disk_emission(fmaxf(parameters.y*g,1000.0f),parameters.z*g*g*g*g,lut_color);
     // float4 emission = disk_emission(19000,parameters.z*g*g*g*g,lut_color);
     
     float ravg = (length(prev_pos)+r)/2.0f;
