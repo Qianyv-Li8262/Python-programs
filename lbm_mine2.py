@@ -77,7 +77,7 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 
 frame_count = 0
 
-kernel_path = os.path.join(base_path, "lbm_core2.cu")
+kernel_path = os.path.join(base_path, "lbm_core3.cu")
 with open(kernel_path, "r", encoding="utf-8") as f:
     cuda_source = f.read()
 module = cp.RawModule(code=cuda_source, options=('-use_fast_math',))
@@ -111,7 +111,7 @@ for i in range(10000):
 
 window = zero_copy_window.ZeroCopyWindow(totwidth,totheight,'lbm')
 cp.cuda.profiler.start()
-iters_per_frame = 50
+iters_per_frame = 1
 last_time = time.time()
 while not window.should_close():
     for i in range(iters_per_frame):
@@ -120,9 +120,9 @@ while not window.should_close():
     visualizekernel((128,32),(16,16),(ux_init,uy_init,image,mask_gpu,cp.int32(totwidth),cp.int32(totheight),cp.float32(50.0)))
     window.unmap_and_draw()
     frame_count += 1
-    # if frame_count == 2:
-    #     cp.cuda.profiler.stop()
-    #     sys.exit()
+    if frame_count == 2:
+        cp.cuda.profiler.stop()
+        sys.exit()
     if frame_count >= 100: # 每100次渲染统计一次
         duration = time.time() - last_time
         fps = frame_count / duration
