@@ -76,23 +76,35 @@ left_zouhe=module.get_function('left_zouhe')
 visualizekernel = module.get_function('visualizekernel')
 last_time = time.time()
 frame_count = 0
+
+
+
+for i in range(10000):
+    lbmkernel((50,13),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(1.9)))
+    right_out( (7,) , (32,) ,(f_out_gpu,cp.int32(800),cp.int32(200)))
+    left_zouhe((7,),(32,),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(0.05),cp.float32(1.9)))
+    f_now_gpu,f_out_gpu=f_out_gpu,f_now_gpu
+
+
+
+
 window = zero_copy_window.ZeroCopyWindow(800,200,'lbm')
-cp.cuda.profiler.start()
+# cp.cuda.profiler.start()
 iters_per_frame = 1
 while not window.should_close():
     for i in range(iters_per_frame):
-        lbmkernel((50,13),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(1.9)))
-        right_out( (4,) , (64,) ,(f_out_gpu,cp.int32(800),cp.int32(200)))
-        left_zouhe((4,),(64,),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(0.05),cp.float32(1.9)))
+        lbmkernel((50,13),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(1.85)))
+        right_out( (13,) , (16,) ,(f_out_gpu,cp.int32(800),cp.int32(200)))
+        left_zouhe((13,),(16,),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(0.05),cp.float32(1.85)))
         f_now_gpu,f_out_gpu=f_out_gpu,f_now_gpu
     # print(cp.max(ux_init))
     image = window.map_pbo()
     visualizekernel((50,13),(16,16),(ux_init,uy_init,image,mask_gpu,cp.int32(800),cp.int32(200),cp.float32(50.0)))
     window.unmap_and_draw()
     frame_count += 1
-    if frame_count == 2:
-        cp.cuda.profiler.stop()
-        sys.exit()
+    # if frame_count == 2:
+    #     cp.cuda.profiler.stop()
+    #     sys.exit()
     if frame_count >= 100: # 每100次渲染统计一次
         duration = time.time() - last_time
         fps = frame_count / duration
