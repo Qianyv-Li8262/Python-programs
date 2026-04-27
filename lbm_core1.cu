@@ -25,7 +25,7 @@ float rho_loc = 0.0f;
 float ux_loc = 0.0f;
 float uy_loc = 0.0f;
 float f[9];
-float f_eqn[9];
+float f_eqn;
 
 //use ghost cells which means you should cover the region with mask = 1 on the y direction
 
@@ -50,8 +50,8 @@ uy[pid]=uy_loc;
 for(int i=0;i<9;++i){
 float e_dot_u = biasx[i] * ux_loc + biasy[i] * uy_loc;
 float usq = ux_loc * ux_loc + uy_loc * uy_loc;
-f_eqn[i] = w[i] * rho_loc * (1 + 3.0f * e_dot_u + 4.5f * e_dot_u * e_dot_u - 1.5f * usq);
-float ff = f[i] - tau_inv * (f[i]-f_eqn[i]);
+f_eqn = w[i] * rho_loc * (1 + 3.0f * e_dot_u + 4.5f * e_dot_u * e_dot_u - 1.5f * usq);
+float ff = f[i] - tau_inv * (f[i]-f_eqn);
 f_out[i * totpixels + pid] = fminf(10.0f,fmaxf(0.0f,ff));
 }
 }
@@ -127,8 +127,8 @@ float local_u = u_in * smooth_factor;
 
     #pragma unroll
     for(int i=0; i<9; ++i){
-        float e_dot_u = biasx[i] * u_in; 
-        float usq = u_in * u_in;
+        float e_dot_u = biasx[i] * local_u; 
+        float usq = local_u * local_u;
         float f_eqn = w[i] * rho * (1.0f + 3.0f * e_dot_u + 4.5f * e_dot_u * e_dot_u - 1.5f * usq);
         float post_collision = f[i] - tau_inv * (f[i] - f_eqn);
         f_out[i * totpixels + pid] = fmaxf(0.0f, post_collision);
@@ -166,14 +166,18 @@ int pid_bot   = (pixel_idy - 1) * totwidth + pixel_idx;
 
     float vort = ((uy[pid_right] - uy[pid_left]) - (ux[pid_top] - ux[pid_bot]))*vort_scale;
 // 如果你喜欢你同学的赛博朋克风格，可以用下面这三行替换上面三行：
-    float r = fminf(fmaxf(fabsf(vort), 0.0f), 1.0f);
-    float g = r;
-    float b = 0.5f;
+    // float r = fminf(fmaxf(fabsf(vort), 0.0f), 1.0f);
+    // float g = r;
+    // float b = 0.5f;
 // float speed = sqrtf(ux[pid]*ux[pid] + uy[pid]*uy[pid]);
 // float r = fminf(speed * 5.0f, 1.0f); // 放大 5 倍观察
 // float g = r;
 // float b = 0.5f; // 这就是你看到的蓝色背景来源
 
+
+    float r = fminf(fmaxf(1.0f + vort, 0.0f), 1.0f);
+    float g = fminf(fmaxf(1.0f - fabsf(vort), 0.0f), 1.0f);
+    float b = fminf(fmaxf(1.0f - vort, 0.0f), 1.0f);
     image[pid*4 + 0] = (unsigned char)(r * 255);
     image[pid*4 + 1] = (unsigned char)(g * 255);
     image[pid*4 + 2] = (unsigned char)(b * 255);
