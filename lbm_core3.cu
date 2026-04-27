@@ -4,10 +4,9 @@ __device__ const int opp[9] = {0,3,4,1,2,7,8,5,6};
 __device__ const float w[9] = {0.444444444f,0.1111111111f,0.1111111111f,0.1111111111f,0.1111111111f,0.0277777778f,0.0277777778f,0.0277777778f,0.0277777778f};
 
 extern "C" 
-// 【终极优化 1】：限制寄存器分配，强制提升满载占用率 (Occupancy)
 __global__ void __launch_bounds__(256) fused_lbmkernel(
-    const bool* __restrict__ mask,      // 【终极优化 2】：加入 const，触发 __ldg 纹理只读缓存加速
-    const float* __restrict__ f_now,    // 【同上】
+    const bool* __restrict__ mask,      
+    const float* __restrict__ f_now,   
     float* __restrict__ f_out,
     float* __restrict__ ux,
     float* __restrict__ uy,

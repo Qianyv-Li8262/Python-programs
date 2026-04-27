@@ -65,7 +65,7 @@ __global__ void fused_lbmkernel(
             float e_dot_u = biasx[i] * local_u; 
             float usq = local_u * local_u;
             float feq = w[i] * rho * (1.0f + 3.0f * e_dot_u + 4.5f * e_dot_u * e_dot_u - 1.5f * usq);
-            float post_collision = f[i] - tau_inv_bnd * (f[i] - feq);
+            float post_collision = fminf(10.0f,f[i] - tau_inv_bnd * (f[i] - feq));
             f_out[i * totpixels + pid] = fmaxf(0.0f, post_collision);
         }
     } 
@@ -96,6 +96,8 @@ __global__ void fused_lbmkernel(
         ux[pid] = ux_loc;
         uy[pid] = uy_loc;
 
+
+        // 碰撞步
         #pragma unroll
         for(int i=0; i<9; ++i){
             float e_dot_u = biasx[i] * ux_loc + biasy[i] * uy_loc;
