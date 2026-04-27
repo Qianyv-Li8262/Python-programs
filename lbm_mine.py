@@ -4,6 +4,7 @@ import zero_copy_window
 import cv2
 import os
 import time
+import sys
 totwidth = 800
 totheight = 200
 totpixels = totwidth * totheight
@@ -76,8 +77,8 @@ visualizekernel = module.get_function('visualizekernel')
 last_time = time.time()
 frame_count = 0
 window = zero_copy_window.ZeroCopyWindow(800,200,'lbm')
-
-iters_per_frame = 100
+cp.cuda.profiler.start()
+iters_per_frame = 1
 while not window.should_close():
     for i in range(iters_per_frame):
         lbmkernel((50,13),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(800),cp.int32(200),cp.float32(1.9)))
@@ -89,6 +90,9 @@ while not window.should_close():
     visualizekernel((50,13),(16,16),(ux_init,uy_init,image,mask_gpu,cp.int32(800),cp.int32(200),cp.float32(50.0)))
     window.unmap_and_draw()
     frame_count += 1
+    if frame_count == 2:
+        cp.cuda.profiler.stop()
+        sys.exit()
     if frame_count >= 100: # 每100次渲染统计一次
         duration = time.time() - last_time
         fps = frame_count / duration
