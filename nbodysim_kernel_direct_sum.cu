@@ -77,3 +77,51 @@ velx[tid]=xdot;
 vely[tid]=ydot;
 
 }
+
+
+extern "C"
+__global__ void render_bodies(
+    unsigned char* __restrict__ image,      // 输出图像 RGBA
+    const float* __restrict__ posx,  // 天体物理 x 坐标
+    const float* __restrict__ posy,  // 天体物理 y 坐标
+    int n,                           // 天体数量
+    int width,                       // 图像宽度 (像素)
+    int height,                      // 图像高度 (像素)
+    float xmin,                      // 物理世界 x 范围
+    float xmax,
+    float ymin,
+    float ymax,
+    float radius)                    // 绘制半径 (像素)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+
+    // 像素中心坐标 (0.5 偏移保证抗锯齿视觉)
+    float px = x + 0.5f;
+    float py = y + 0.5f;
+
+    // 映射到物理坐标：
+    // 物理 x 从左到右线性映射
+    float fx = xmin + (px / (float)width)  * (xmax - xmin);
+    // 物理 y：图像 y 向下，物理 y 轴向上，所以需要翻转：
+    // 图像顶部 (py=0) 对应 ymax，底部对应 ymin
+    float fy = ymax - (py / (float)height) * (ymax - ymin);
+
+    float r2 = radius * radius;
+    uchar4 color = make_uchar4(0, 0, 0, 255); // 黑色背景
+
+    for (int i = 0; i < n; ++i) {
+        float dx = fx - posx[i];
+        float dy = fy - posy[i];
+        if (dx * dx + dy * dy <= r2) {
+            color = make_uchar4(255, 255, 255, 255); // 白色
+            break;  // 找到一个天体就跳出，可以加速
+        }
+    }
+
+    image[(y * width + x)*4+0] = color.x;
+    image[(y * width + x)*4+1] = color.y;
+    image[(y * width + x)*4+2] = color.z;
+    image[(y * width + x)*4+3] = color.w;
+}
