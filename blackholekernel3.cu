@@ -47,12 +47,12 @@ __device__ __forceinline__ float rand_float(unsigned int seed) {
     return (float)seed / 4294967296.0f; // 归一化到 [0, 1)
 }
 
-// --------- 辅助哈希函数 ---------
+
 __device__ __forceinline__ float fractf(float x) {
     return x - floorf(x);
 }
 
-// 3D 空间哈希，基于 Dave Hoskins 的算法
+
 __device__ float hash31(float x, float y, float z) {
     float3 p3 = make_float3(x, y, z);
     p3.x = fractf(p3.x * 0.1031f);
@@ -69,9 +69,6 @@ __device__ float3 procedural_stars(float3 dir, int frames) {
 
     float lod_blend = __expf(-(float)(frames - 1) * 0.5f); 
     
-    // ==========================================
-    // 图层 1：密集的背景微弱星
-    // ==========================================
     float sharp1_target = 25.0f; // 静止时极度尖锐
     float sharp1_moving = 2.0f;  // 移动时极度模糊（扩散为大光斑防闪烁）
     // 根据运动状态插值当前的锐度
@@ -99,9 +96,6 @@ __device__ float3 procedural_stars(float3 dir, int frames) {
         total_stars = total_stars + make_float3(1.0f, 1.0f, 1.0f) * brightness * star_shape;
     }
     
-    // ==========================================
-    // 图层 2：稀疏的超亮主角恒星
-    // ==========================================
     float sharp2_target = 18.0f;
     float sharp2_moving = 1.5f; 
     float s2 = sharp2_moving * lod_blend + sharp2_target * (1.0f - lod_blend);
@@ -135,25 +129,12 @@ __device__ float3 procedural_stars(float3 dir, int frames) {
 }
 
 
-
-
-
-
-
-
-
-
-
-// 计算吸积盘在某点的发射颜色和强度
 __device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t lut_color) {
 
 
     float4 color = tex2D<float4>(lut_color,(temp-1000.0f)/20000.0f,0.5f);
     
-    // 3. 发射强度（内圈更亮）
-    // float intensity = 10.0f*powf(4/(r_disk-1.3f),2.0f);
-    // intensity = fminf(3.0f, intensity);
-    // intensity = fminf(20.0f, fmaxf(0.0f, intensity));
+
 
     
     return make_float4(color.x * intensity, color.y * intensity, color.z * intensity, 1.0f);
@@ -281,34 +262,6 @@ uu=1.0f/(uplsq*uplsq);
 float3 k21 = (p+(stephalf)*k12)*uu;
 float3 k22 = pos_tmp * g;
 
-// //step 3
-// pos_tmp=cam_pos+(stephalf)*k21;
-// r = length(pos_tmp);
-// u=1.0f/(2.0f * r);
-// upl = 1.0f+u;
-// umi = 1.0f-u;
-// rmhalf = r-0.5f;
-// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-// uplsq=upl*upl;
-// uu=1.0f/(uplsq*uplsq);
-// float3 k31 = (p+(stephalf)*k22)*uu;
-// float3 k32 = pos_tmp * g;
-
-// //step 4
-// pos_tmp=cam_pos+ current_step*k31;
-// r = length(pos_tmp);
-// u=1.0f/(2.0f * r);
-// upl = 1.0f+u;
-// umi = 1.0f-u;
-
-// rmhalf = r-0.5f;
-// g = -upl*(2.0f-u)/(rmhalf*rmhalf*rmhalf);
-// uplsq=upl*upl;
-// uu=1.0f/(uplsq*uplsq);
-// float3 k41 = (p + current_step*k32)*uu;
-// float3 k42 = pos_tmp * g;
-
-//concatenate
 cam_pos = cam_pos+(current_step)*(k21);
 p = p+(current_step)*(k22);
 r = length(cam_pos);
@@ -339,7 +292,7 @@ float r_disk=sqrtf(r_disk_sq);
 
     float k = 2.0f; 
     float intensity_factor = 1.0f - __expf(-(k * parameters.z)*(k * parameters.z));
-    float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos)* intensity_factor;
+    float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos)* intensity_factor / g;
     step_opacity = fminf(step_opacity, 1.0f);
     
 

@@ -1,5 +1,9 @@
-#define EPS 0.05
+#define EPS 0.0025
 #define BLOCKSIZE 256
+#include <cuda_pipeline.h>
+#include <cuda/pipeline>
+#include <cooperative_groups.h>
+// auto test_pipe = cuda::make_pipeline<cuda::thread_scope_block>();
 __device__ __forceinline__ float getdistance(float xme,float yme,float xit,float yit){
     float xx = xme - xit;
     float yy = yme - yit;
@@ -8,9 +12,9 @@ __device__ __forceinline__ float getdistance(float xme,float yme,float xit,float
 __device__ __forceinline__ float3 getaccel(float m2,float xme,float yme,float xit,float yit){
     float xx = xme - xit;
     float yy = yme - yit;
-    float dis=sqrtf(xx*xx+yy*yy);
-    float diss_soft = dis*dis + EPS * EPS;
-    float F = m2 / diss_soft * rsqrtf(diss_soft);
+    float invdis=rsqrtf(xx*xx+yy*yy+EPS*EPS);
+    // float diss_soft = dis*dis + EPS * EPS;
+    float F = m2 *invdis*invdis*invdis;
     return make_float3(-F*xx,-F*yy,0.0f);
 }
 extern "C"
@@ -24,6 +28,20 @@ __global__ void nbodystep(
 )
 {
 
+
+
+
+        namespace cg = cooperative_groups;
+    cg::thread_block block = cg::this_thread_block();
+
+    // 2. 在共享内存中声明 Pipeline 的状态对象
+    // cuda::thread_scope_block 表示作用域是整个 Block
+    // 2 表示我们要用双缓冲 (Double Buffering，2个 stage)
+    __shared__ cuda::pipeline_shared_state<cuda::thread_scope_block, 2> shared_state;
+
+    // 3. 正确初始化 Pipeline！把 block 和 状态指针 传进去
+    auto pipe = cuda::make_pipeline(block, &shared_state);
+
 int tid = blockIdx.x*blockDim.x+threadIdx.x;
 if(tid>=n) return;
 float x=posx[tid];
@@ -36,6 +54,7 @@ float yddot = 0.0f;
 
 __shared__ float4 pos_and_vel[BLOCKSIZE];
 __shared__ float masss[BLOCKSIZE];
+// #pragma unroll
 for(int tile=0;tile<gridDim.x;++tile)
 {
 int idx = tile * blockDim.x + threadIdx.x;
@@ -43,9 +62,9 @@ if (idx<n)
     {
     float xx=posx[idx];
     float yy=posy[idx];
-    float xxdot=velx[idx];
-    float yydot=vely[idx];
-    pos_and_vel[threadIdx.x]=make_float4(xx,yy,xxdot,yydot);
+    // float xxdot=velx[idx];
+    // float yydot=vely[idx];
+    pos_and_vel[threadIdx.x]=make_float4(xx,yy,0.0f,0.0f);
     masss[threadIdx.x] = mass[idx];
     } else 
     {
@@ -53,7 +72,7 @@ if (idx<n)
     masss[threadIdx.x] = 0.0f;
     }
     __syncthreads();
-
+#pragma unroll 16
 for(int i=0;i<blockDim.x;++i)
     {
     int j = tile*blockDim.x + i;
@@ -124,4 +143,59 @@ __global__ void render_bodies(
     image[(y * width + x)*4+1] = color.y;
     image[(y * width + x)*4+2] = color.z;
     image[(y * width + x)*4+3] = color.w;
+}
+
+
+
+
+// --- 1. 清空背景的 Kernel ---
+extern "C"
+__global__ void clear_background(unsigned char* __restrict__ image, int width, int height) 
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) return;
+
+    int idx = (y * width + x) * 4;
+    image[idx + 0] = 0;   // R
+    image[idx + 1] = 0;   // G
+    image[idx + 2] = 0;   // B
+    image[idx + 3] = 255; // A
+}
+
+// --- 2. 极速渲染星星的 Kernel ---
+extern "C"
+__global__ void render_bodies_fast(
+    unsigned char* __restrict__ image,
+    const float* __restrict__ posx,
+    const float* __restrict__ posy,
+    int n,
+    int width,
+    int height,
+    float xmin,
+    float xmax,
+    float ymin,
+    float ymax)
+{
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid >= n) return;
+
+    float x = posx[tid];
+    float y = posy[tid];
+
+    // 如果星星飞出了视口，就不画它
+    if (x < xmin || x > xmax || y < ymin || y > ymax) return;
+
+    // 物理坐标映射到像素坐标 (之前逻辑的逆向)
+    int px = (int)((x - xmin) / (xmax - xmin) * width);
+    int py = (int)((ymax - y) / (ymax - ymin) * height);
+
+    // 确保像素不越界
+    if (px >= 0 && px < width && py >= 0 && py < height) {
+        int idx = (py * width + px) * 4;
+        image[idx + 0] = 255; // R
+        image[idx + 1] = 255; // G
+        image[idx + 2] = 255; // B
+        // Alpha 通道在 clear_background 已经是 255 了，这里不用动
+    }
 }

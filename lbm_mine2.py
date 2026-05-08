@@ -50,8 +50,6 @@ def load_mask_from_image(file_path, totwidth, totheight):
 
     mask_2d = (img[:, :, 1] == 0).astype(np.bool_)
 
-    # mask_2d = np.flipud(mask_2d) 
-
     mask_2d[0, :] = True
     mask_2d[totheight - 1, :] = True
     
@@ -64,16 +62,8 @@ def load_mask_from_image(file_path, totwidth, totheight):
     return mask_gpu
 
 
-mask_gpu = load_mask_from_image('test1_lbm.bmp', totwidth,totheight)
+mask_gpu = load_mask_from_image('circle.bmp', totwidth,totheight)
 base_path = os.path.dirname(os.path.abspath(__file__))
-# kernel_path = os.path.join(base_path, "lbm_core1.cu")
-# with open(kernel_path, "r", encoding="utf-8") as f:
-#     cuda_source = f.read()
-# module = cp.RawModule(code=cuda_source, options=('-use_fast_math',))
-# lbmkernel = module.get_function('lbmkernel')
-# right_out=module.get_function('right_out')
-# left_zouhe=module.get_function('left_zouhe')
-# visualizekernel = module.get_function('visualizekernel')
 
 frame_count = 0
 
@@ -86,22 +76,12 @@ visualizekernel = module.get_function('visualizekernel')
 
 stream = cp.cuda.Stream(non_blocking=True)
 
-# with stream:
-#     stream.begin_capture()
-#     lbmkernel((128,32),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.9)))
-#     right_out( (4,) , (128,) ,(f_out_gpu,cp.int32(totwidth),cp.int32(totheight)))
-#     left_zouhe((4,),(128,),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(0.05),cp.float32(1.99)))
-#     lbmkernel((128,32),(16,16),(mask_gpu,f_out_gpu,f_now_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.9)))
-#     right_out( (4,) , (128,) ,(f_now_gpu,cp.int32(totwidth),cp.int32(totheight)))
-#     left_zouhe((4,),(128,),(mask_gpu,f_out_gpu,f_now_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(0.05),cp.float32(1.99)))
-#     graph=stream.end_capture()
-
 with stream:
     stream.begin_capture()
-    lbmkernel((128,32),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.5),
-                                cp.float32(0.2),cp.float32(1.1)))
-    lbmkernel((128,32),(16,16),(mask_gpu,f_out_gpu,f_now_gpu,ux_init,uy_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.5),
-                                cp.float32(0.2),cp.float32(1.1)))
+    lbmkernel((128,32),(16,16),(mask_gpu,f_now_gpu,f_out_gpu,ux_init,uy_init,rho_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.8),
+                                cp.float32(0.10),cp.float32(1.8)))
+    lbmkernel((128,32),(16,16),(mask_gpu,f_out_gpu,f_now_gpu,ux_init,uy_init,rho_init,cp.int32(totwidth),cp.int32(totheight),cp.float32(1.8),
+                                cp.float32(0.10),cp.float32(1.8)))
     graph=stream.end_capture()
 
 for i in range(2500):
@@ -111,18 +91,18 @@ for i in range(2500):
 
 window = zero_copy_window.ZeroCopyWindow(totwidth,totheight,'lbm')
 cp.cuda.profiler.start()
-iters_per_frame = 1
+iters_per_frame = 10
 last_time = time.time()
 while not window.should_close():
     for i in range(iters_per_frame):
         graph.launch(stream=stream)
     image = window.map_pbo()
-    visualizekernel((128,32),(16,16),(ux_init,uy_init,image,mask_gpu,cp.int32(totwidth),cp.int32(totheight),cp.float32(50.0)))
+    visualizekernel((128,32),(16,16),(ux_init,uy_init,rho_init,image,mask_gpu,cp.int32(totwidth),cp.int32(totheight),cp.float32(50.0)))
     window.unmap_and_draw()
     frame_count += 1
-    if frame_count == 2:
-        cp.cuda.profiler.stop()
-        sys.exit()
+    # if frame_count == 2:
+    #     cp.cuda.profiler.stop()
+    #     sys.exit()
     if frame_count >= 100: # 每100次渲染统计一次
         duration = time.time() - last_time
         fps = frame_count / duration

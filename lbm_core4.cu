@@ -10,6 +10,7 @@ __global__ void fused_lbmkernel(
     float* __restrict__ f_out,
     float* __restrict__ ux,
     float* __restrict__ uy,
+    float* __restrict__ rho__,
     const int totwidth, 
     const int totheight,
     const float tau_inv,      // 内部区域的 tau_inv 
@@ -61,6 +62,7 @@ __global__ void fused_lbmkernel(
         
         ux[pid] = local_u;
         uy[pid] = 0.0f;
+        rho__[pid] = rho;
         // float m[9];
         // 碰撞步
 
@@ -146,8 +148,10 @@ for (int i = 0; i < 9; ++i) {
         uy_loc /= rho_loc;
         ux_loc = fminf(0.4f, fmaxf(-0.4f, ux_loc));
         uy_loc = fminf(0.4f, fmaxf(-0.4f, uy_loc));
+        rho_loc = fminf(1.5f, fmaxf(0.0f, rho_loc));
         ux[pid] = ux_loc;
         uy[pid] = uy_loc;
+        rho__[pid] = rho_loc;
 
 
         // 碰撞步
@@ -224,9 +228,10 @@ extern "C"
 __global__ void visualizekernel(
 const float* __restrict__ ux,
 const float* __restrict__ uy,
+const float* __restrict__ rho_,
 unsigned char* __restrict__ image,
 const bool* __restrict__ mask,
-const int totwidth, const int totheight,
+const int totwidth,const int totheight,
 const float vort_scale
 ){
 
@@ -247,14 +252,14 @@ int pid_right = pixel_idy * totwidth + (pixel_idx + 1);
 int pid_left  = pixel_idy * totwidth + (pixel_idx - 1);
 int pid_top   = (pixel_idy + 1) * totwidth + pixel_idx;
 int pid_bot   = (pixel_idy - 1) * totwidth + pixel_idx;
-
+// float rhoo = rho_[pid];
     float vort = ((uy[pid_right] - uy[pid_left]) - (ux[pid_top] - ux[pid_bot]))*vort_scale;
 // 如果你喜欢你同学的赛博朋克风格，可以用下面这三行替换上面三行：
     // float r = fminf(fmaxf(fabsf(vort), 0.0f), 1.0f);
     // float g = r;
     // float b = 0.5f;
 // float speed = sqrtf(ux[pid]*ux[pid] + uy[pid]*uy[pid]);
-// float r = fminf(speed * 5.0f, 1.0f); // 放大 5 倍观察
+// float r = rhoo;// 放大 5 倍观察
 // float g = r;
 // float b = 0.5f; // 这就是你看到的蓝色背景来源
 

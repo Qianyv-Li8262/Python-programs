@@ -2,6 +2,8 @@ import numpy as np
 
 def temperature_to_color(temp):
     t = temp / 100.0
+    if temp<1000.0:
+        return 0,0,0
     
     if t <= 66.0:
         r = 1
@@ -28,7 +30,7 @@ def temperature_to_color(temp):
     return r, g, b
 u = np.empty((1,2000,3),dtype=np.float32)
 for i in range(2000):
-    t = i*10+1010
+    t = i*10+510
     r,g,b=temperature_to_color(t)
     u[0,i,:]=(r,g,b)
 np.save('color_lut.npy', u)

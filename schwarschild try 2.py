@@ -68,7 +68,7 @@ lut_color= cp.load(colorlut_file_path).astype(cp.float32)
 
 tex_handle_color,____=create_texture_object(lut_color,3)
 
-kernel_path = os.path.join(base_path, "blackholekernel3.cu")
+kernel_path = os.path.join(base_path, "blackholekernel_bkgdtemp.cu")
 with open(kernel_path, "r", encoding="utf-8") as f:
     cuda_source = f.read()
 
