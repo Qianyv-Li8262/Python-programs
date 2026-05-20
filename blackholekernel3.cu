@@ -1,3 +1,6 @@
+// #include<cooperative_groups.h>
+// #include <cuda_pipeline_primitives.h>
+
 __device__ __forceinline__ float3 normalize(float3 v){
     float inv_norm = rsqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
     return make_float3(v.x*inv_norm , v.y*inv_norm , v.z*inv_norm);
@@ -142,7 +145,7 @@ __device__ float4 disk_emission(float temp,float intensity,cudaTextureObject_t l
 
 extern "C" __global__
 void blackholekernel(
-float* __restrict__ raw_img,
+float4* __restrict__ raw_img,
 cudaTextureObject_t tex_obj,
 cudaTextureObject_t lut_physics,
 cudaTextureObject_t lut_color,
@@ -184,10 +187,10 @@ float jitterx;
 float jittery;
 float physical_x;
 float physical_y;
-for(int i = 0;i < jitternum;++i){
+// for(int i = 0;i < jitternum;++i){
 
-jitterx = rand_float((unsigned int)pixel_idx+i+frames);
-jittery = rand_float((unsigned int)pixel_idy+i+12345+frames);
+jitterx = rand_float((unsigned int)pixel_idx+frames);
+jittery = rand_float((unsigned int)pixel_idy+12345+frames);
 physical_x = (((float)pixel_idx+jitterx)/(float)imgwidth - 0.5f) * physwidth;
 physical_y = (((float)pixel_idy+jittery)/(float)imgheight - 0.5f) * physheight;
 float3 cam_pos=make_float3(cam_pos_x,cam_pos_y,cam_pos_z);
@@ -271,12 +274,12 @@ umi = 1.0f-u;
 float3 temp = make_float3((cam_pos.x+prev_pos.x)/2.0f,(cam_pos.y+prev_pos.y)/2.0f,0.0f);
 // float r_disk = sqrtf(cam_pos.x * cam_pos.x + cam_pos.y * cam_pos.y);
 float r_disk_sq = temp.x * temp.x + temp.y * temp.y;
-bool indisk = (r_disk_sq > 24.4974f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 0.5f);
+bool indisk = (r_disk_sq > 24.4974f && r_disk_sq < 272.25f && fabsf(cam_pos.z) < 1.5f);
 
 
 if (indisk) {
 float r_disk=sqrtf(r_disk_sq);
-    float4 parameters = tex2D<float4>(lut_physics,(r_disk-4.9495f)/11.5505f,fabsf(cam_pos.z)/0.5f);
+    float4 parameters = tex2D<float4>(lut_physics,(r_disk-4.9495f)/11.5505f,fabsf(cam_pos.z)/1.5f);
     
     // calculate g factor
     float td = tdot(r);
@@ -293,7 +296,8 @@ float r_disk=sqrtf(r_disk_sq);
     float k = 2.0f; 
     float intensity_factor = 1.0f - __expf(-(k * parameters.z)*(k * parameters.z));
     float step_opacity = parameters.x * 1.7f*uuu*uuu*length(cam_pos-prev_pos)* intensity_factor / g;
-    step_opacity = fminf(step_opacity, 1.0f);
+    step_opacity = parameters.y*g<1500.0f ? 0.0f : fminf(step_opacity, 1.0f);
+    // step_opacity = fminf(step_opacity, 1.0f);
     
 
     float transmittance = 1.0f - accumulated_color.w;
@@ -367,10 +371,12 @@ color = accumulated_color + make_float4(0.0f, 0.0f, 0.0f, 1.0f) * (1.0f - accumu
 }
 
 buffer = buffer+color;
-}
-buffer = buffer*(1.0f/(float)jitternum);
-    int pixel_index = (pixel_idy * imgwidth + pixel_idx) * 3;
-    raw_img[pixel_index + 0] = buffer.x; // R
-    raw_img[pixel_index + 1] = buffer.y; // G
-    raw_img[pixel_index + 2] = buffer.z; // B
+// }
+// buffer = buffer*(1.0f/(float)jitternum);
+    int pixel_index = (pixel_idy * imgwidth + pixel_idx);
+    // raw_img[pixel_index + 0] = buffer.x; // R
+    // raw_img[pixel_index + 1] = buffer.y; // G
+    // raw_img[pixel_index + 2] = buffer.z; // B
+    // raw_img[pixel_index + 3] = 0.0; 
+    raw_img[pixel_index] = make_float4(buffer.x,buffer.y,buffer.z,0.0);
 }
